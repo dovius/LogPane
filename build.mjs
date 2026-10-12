@@ -48,7 +48,8 @@ const builds = [
 ];
 
 function copyStatic() {
-  cpSync(join(root, 'static'), dist, { recursive: true });
+  // skip OS clutter such as Finder's .DS_Store
+  cpSync(join(root, 'static'), dist, { recursive: true, filter: (src) => !/(^|[\\/])(\.DS_Store|Thumbs\.db)$/.test(src) });
   // package.json is the single source of the version (bump it with `npm version`).
   const manifest = JSON.parse(readFileSync(join(root, 'static/manifest.json'), 'utf8'));
   writeFileSync(join(dist, 'manifest.json'), `${JSON.stringify({ ...manifest, version: pkg.version }, null, 2)}\n`);
@@ -93,7 +94,7 @@ if (args.has('--watch')) {
   if (args.has('--zip')) {
     const zip = join(root, 'logpane-extension.zip');
     rmSync(zip, { force: true });
-    execFileSync('zip', ['-qr', zip, '.', '-x', 'standalone/*'], { cwd: dist });
+    execFileSync('zip', ['-qr', zip, '.', '-x', 'standalone/*', '*.DS_Store'], { cwd: dist });
     console.log(`packed ${zip}`);
   }
 }
