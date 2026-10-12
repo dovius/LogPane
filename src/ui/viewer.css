@@ -85,6 +85,28 @@ html:not(.lv-active) #lv-root {
 #lv-reopen {
   display: none;
 }
+/* Automatic mode, while the raw text is still loading: hide it and say what is happening. */
+html.lv-pending body > pre {
+  visibility: hidden !important;
+}
+html.lv-pending::after {
+  content: 'Opening in LogPane…';
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  color: #656d76;
+  font: 14px system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  html.lv-pending::after {
+    background: #0d1117;
+    color: #8d96a0;
+  }
+}
 html:not(.lv-active) #lv-reopen {
   display: block;
   position: fixed;
@@ -448,6 +470,20 @@ kbd {
   font: 12px var(--lv-mono);
   color: var(--lv-dim);
   white-space: nowrap;
+}
+
+.lv-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--lv-border);
+  background: color-mix(in srgb, var(--lv-accent) 10%, var(--lv-bg));
+  font-size: 12.5px;
+}
+.lv-banner span {
+  flex: 1 1 320px;
 }
 
 /* ---- Popovers & menus ---- */

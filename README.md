@@ -60,7 +60,7 @@ their entry. Timestamps keep full nanosecond precision for ordering.
 ## Using it
 
 - **On a log page**: click the LogPane toolbar button on any plain-text log page. Click again, or use **Raw**, to switch back to the original text.
-- **Open automatically**: View ▾ → “Open automatically on this domain…”, or the extension options. Add e.g. `https://console-openshift-console.apps.<cluster>`. From then on, Raw pod-log pages on that domain open in LogPane automatically.
+- **Open automatically**: the first time you open a Raw pod log with the toolbar button, LogPane offers to open that console's Raw logs automatically. Click **Enable…**, confirm in the small window, and allow access in Chrome's prompt. The setting is also under View ▾ and in the extension options. From then on, clicking **Raw** in the console opens the log straight in LogPane. The raw text never flashes: it stays hidden while it downloads, and pages that are not JSON logs are left alone.
 - **Local files**: click the toolbar button on any other page, then drop `.log` / `.json` / `.ndjson` files or paste text.
 - **Without installing anything**: `dist/standalone/logpane.html` is one self-contained HTML file. Open it from disk and drop a log on it. This works where extensions are blocked by policy.
 

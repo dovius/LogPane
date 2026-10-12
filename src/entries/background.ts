@@ -37,8 +37,14 @@ chrome.action.onClicked.addListener(async (tab) => {
 chrome.runtime.onMessage.addListener((msg: { type?: unknown; origin?: unknown }, sender) => {
   if (sender.id !== chrome.runtime.id || msg?.type !== 'lv-open-options') return;
   const origin = typeof msg.origin === 'string' ? normalizeOrigin(msg.origin) : null;
-  const query = origin ? `?add=${encodeURIComponent(origin)}` : '';
-  void chrome.tabs.create({ url: chrome.runtime.getURL(`options.html${query}`) });
+  if (!origin) return void chrome.runtime.openOptionsPage();
+  // A small window with one "Enable" button; Chrome's permission prompt needs that click.
+  void chrome.windows.create({
+    url: chrome.runtime.getURL(`options.html?add=${encodeURIComponent(origin)}&popup=1`),
+    type: 'popup',
+    width: 560,
+    height: 460,
+  });
 });
 
 /** Keeps the registered content script in sync with the enabled (and still permitted) origins. */
@@ -56,7 +62,8 @@ async function syncAutoScripts(): Promise<void> {
       matches: origins.map((o) => originPattern(o).replace(/\/\*$/, RAW_LOG_PATH)),
       js: ['content.js'],
       css: ['viewer.css'],
-      runAt: 'document_idle',
+      // Start before the text renders so the raw log never flashes (content.ts waits for the full text).
+      runAt: 'document_start',
       persistAcrossSessions: true,
     },
   ]);

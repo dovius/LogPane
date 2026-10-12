@@ -14,6 +14,13 @@ import { saveSettings, type Settings } from './settings';
 import type { LogStore } from './store';
 import { FilterBar, Header } from './Toolbar';
 
+/** Suggestion shown after a manual open on a Raw log page: open these automatically from now on. */
+export interface AutoPrompt {
+  host: string;
+  onEnable: () => void;
+  onDismiss: () => void;
+}
+
 export interface AppProps {
   store: LogStore;
   mode: 'page' | 'standalone';
@@ -24,6 +31,7 @@ export interface AppProps {
   baseUrl?: string;
   onShowRaw?: () => void;
   onAutoOpen?: () => void;
+  autoPrompt?: AutoPrompt;
 }
 
 function useStoreVersion(store: LogStore): number {
@@ -76,6 +84,7 @@ export function App(props: AppProps) {
   const [tailSeconds, setTailSeconds] = useState(0);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [promptOpen, setPromptOpen] = useState(Boolean(props.autoPrompt));
   const [scrollNonce, setScrollNonce] = useState(0);
   const listApi = useRef<ListApi>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -416,6 +425,33 @@ export function App(props: AppProps) {
             onDownload={onDownload}
           />
         </>
+      )}
+      {promptOpen && props.autoPrompt && (
+        <div class="lv-banner" role="region" aria-label="Automatic opening">
+          <span>
+            Skip the toolbar click next time: open Raw logs from <b>{props.autoPrompt.host}</b> in LogPane automatically?
+          </span>
+          <button
+            type="button"
+            class="lv-btn lv-btn-small lv-primary"
+            onClick={() => {
+              props.autoPrompt!.onEnable();
+              setPromptOpen(false);
+            }}
+          >
+            Enable…
+          </button>
+          <button
+            type="button"
+            class="lv-btn lv-btn-small"
+            onClick={() => {
+              props.autoPrompt!.onDismiss();
+              setPromptOpen(false);
+            }}
+          >
+            Not now
+          </button>
+        </div>
       )}
       <div class={`lv-main${selected ? ' lv-with-details' : ''}`}>
         <div class="lv-list-wrap">
