@@ -76,6 +76,17 @@ npm run build      # → dist/  (unpacked extension) and dist/standalone/logpane
 Then go to `chrome://extensions` (Edge: `edge://extensions`), enable **Developer mode**, click
 **Load unpacked**, and select `dist/`.
 
+## Releasing
+
+`package.json` holds the version; the build copies it into `manifest.json`.
+
+1. `npm version patch` (or `minor` / `major`). This bumps the version, commits, and creates the tag `vX.Y.Z`.
+2. `npm ci && npm test && npm run zip` produces `logpane-extension.zip`.
+3. `git push --follow-tags`.
+4. Upload the zip in the Chrome Web Store dashboard. Optionally attach it to a GitHub release for that tag.
+
+The Chrome Web Store only looks at the manifest version, which must increase with every upload. The tags let anyone check which source a store version was built from.
+
 ## Development
 
 ```sh

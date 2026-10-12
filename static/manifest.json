@@ -2,7 +2,6 @@
   "manifest_version": 3,
   "name": "LogPane – JSON & NDJSON Log Viewer",
   "short_name": "LogPane",
-  "version": "1.0.0",
   "description": "A fast, private JSON and NDJSON log viewer. Search, filter and inspect structured logs directly in your browser.",
   "homepage_url": "https://github.com/dovius/LogPane",
   "minimum_chrome_version": "116",

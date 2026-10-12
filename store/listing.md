@@ -135,4 +135,4 @@ Screenshots are rendered at 1.25× from a 1024×640 layout, so text stays readab
 
 **After publishing**
 - The same zip can be submitted to Microsoft Edge Add-ons (partner.microsoft.com). No code changes are needed.
-- Every update needs a higher `version` in `static/manifest.json` (and `package.json`).
+- Every update needs a higher version: run `npm version patch|minor|major` (it bumps `package.json`, which the build copies into the manifest, and tags `vX.Y.Z`), then `npm run zip` and upload.

@@ -49,6 +49,9 @@ const builds = [
 
 function copyStatic() {
   cpSync(join(root, 'static'), dist, { recursive: true });
+  // package.json is the single source of the version (bump it with `npm version`).
+  const manifest = JSON.parse(readFileSync(join(root, 'static/manifest.json'), 'utf8'));
+  writeFileSync(join(dist, 'manifest.json'), `${JSON.stringify({ ...manifest, version: pkg.version }, null, 2)}\n`);
   cpSync(join(root, 'src/ui/viewer.css'), join(dist, 'viewer.css'));
   cpSync(join(root, 'LICENSE'), join(dist, 'LICENSE'));
   writeFileSync(join(dist, 'THIRD_PARTY_LICENSES.txt'), thirdPartyNotices());
