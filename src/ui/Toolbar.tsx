@@ -1,14 +1,18 @@
 import type { RefObject } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { FilterState } from '../core/filter';
 import { formatFull, parseUserTime, type TimeMode } from '../core/time';
-import { LEVELS, type Level, type LevelCounts } from '../core/types';
+import type { Level, LevelCounts } from '../core/types';
 import type { Settings } from './settings';
 import type { SourceState } from './store';
 import { RELOAD_TAIL_MIN_SECONDS } from './viewState';
 import { Popover } from './widgets';
 
 const TAIL_OPTIONS = [0, 2, 5, 10, 30];
+const MIN_FONT = 9;
+const MAX_FONT = 20;
+/** Quick ranges of the Time filter, counted back from the newest entry (logs are often hours old). */
+const LAST_RANGES: [string, number][] = [['1 min', 60_000], ['5 min', 300_000], ['15 min', 900_000], ['1 hour', 3_600_000], ['6 hours', 21_600_000]];
 
 export function Header(props: {
   mode: 'page' | 'standalone';
@@ -17,9 +21,6 @@ export function Header(props: {
   onToggleSource: (id: number) => void;
   onRemoveSource: (id: number) => void;
   onAdd: () => void;
-  counts: LevelCounts;
-  levels: Level[];
-  onLevelClick: (level: Level, multi: boolean) => void;
   canRefetch: boolean;
   busy: boolean;
   onReload: () => void;
@@ -58,31 +59,15 @@ export function Header(props: {
           );
         })}
         <button type="button" class="lv-btn" onClick={props.onAdd} title="Add another log (file or Raw URL) and merge by time">
-          + Add log
+          + <span class="lv-btn-text">Add log</span>
         </button>
-      </div>
-
-      <div class="lv-levels" role="group" aria-label="Levels">
-        {LEVELS.filter((l) => props.counts[l] > 0 || props.levels.includes(l)).map((l) => {
-          const active = props.levels.length === 0 || props.levels.includes(l);
-          return (
-            <button
-              type="button"
-              class={`lv-level-chip lv-lvl-${l}${active ? '' : ' lv-off'}${props.levels.includes(l) ? ' lv-solo' : ''}`}
-              title="Click: show only this level (click again for all). Ctrl/⌘/Shift-click: add or remove."
-              onClick={(e) => props.onLevelClick(l, e.ctrlKey || e.metaKey || e.shiftKey)}
-            >
-              {l === 'OTHER' ? 'plain' : l} <b>{props.counts[l].toLocaleString()}</b>
-            </button>
-          );
-        })}
       </div>
 
       <div class="lv-header-right">
         {props.canRefetch && (
           <>
             <button type="button" class="lv-btn" disabled={props.busy} onClick={props.onReload} title="Fetch the log again (filters are kept)">
-              ⟳ Reload
+              ⟳ <span class="lv-btn-text">Reload</span>
             </button>
             <label
               class={`lv-select${props.tailSeconds ? ' lv-on' : ''}`}
@@ -101,25 +86,33 @@ export function Header(props: {
             </label>
           </>
         )}
-        <div class="lv-seg" role="group" aria-label="Time zone">
-          <button type="button" class={s.timeMode === 'utc' ? 'lv-on' : ''} onClick={() => props.onSettings({ timeMode: 'utc' })}>UTC</button>
-          <button type="button" class={s.timeMode === 'local' ? 'lv-on' : ''} onClick={() => props.onSettings({ timeMode: 'local' })}>Local</button>
-        </div>
-        <div class="lv-seg" role="group" aria-label="Font size">
-          <button type="button" title="Smaller text" onClick={() => props.onSettings({ fontSize: Math.max(9, s.fontSize - 1) })}>A−</button>
-          <button type="button" title="Larger text" onClick={() => props.onSettings({ fontSize: Math.min(20, s.fontSize + 1) })}>A+</button>
-        </div>
         <Popover label="View ▾" align="right">
           {() => (
-            <div class="lv-menu">
+            <div class="lv-menu lv-view-menu">
+              <div class="lv-menu-row">
+                <span class="lv-menu-label">Time zone</span>
+                <div class="lv-seg" role="group" aria-label="Time zone">
+                  <button type="button" class={s.timeMode === 'utc' ? 'lv-on' : ''} onClick={() => props.onSettings({ timeMode: 'utc' })}>UTC</button>
+                  <button type="button" class={s.timeMode === 'local' ? 'lv-on' : ''} onClick={() => props.onSettings({ timeMode: 'local' })}>Local</button>
+                </div>
+              </div>
+              <div class="lv-menu-row">
+                <span class="lv-menu-label">Text size</span>
+                <div class="lv-seg" role="group" aria-label="Text size">
+                  <button type="button" title="Smaller text" disabled={s.fontSize <= MIN_FONT} onClick={() => props.onSettings({ fontSize: Math.max(MIN_FONT, s.fontSize - 1) })}>A−</button>
+                  <span class="lv-seg-label">{s.fontSize}px</span>
+                  <button type="button" title="Larger text" disabled={s.fontSize >= MAX_FONT} onClick={() => props.onSettings({ fontSize: Math.min(MAX_FONT, s.fontSize + 1) })}>A+</button>
+                </div>
+              </div>
+              <hr />
               <label>
                 <input type="checkbox" checked={s.showLogger} onChange={() => props.onSettings({ showLogger: !s.showLogger })} /> Logger column
               </label>
               <label>
                 <input type="checkbox" checked={s.showThread} onChange={() => props.onSettings({ showThread: !s.showThread })} /> Thread column
               </label>
-              <label>
-                Context lines for copy
+              <label class="lv-menu-row">
+                <span class="lv-menu-label">Context lines for copy</span>
                 <input
                   type="number"
                   min={1}
@@ -129,7 +122,7 @@ export function Header(props: {
                 />
               </label>
               {props.onAutoOpen && (
-                <button type="button" class="lv-btn" onClick={props.onAutoOpen}>
+                <button type="button" class="lv-btn lv-menu-item" onClick={props.onAutoOpen}>
                   Open automatically on this domain…
                 </button>
               )}
@@ -151,49 +144,171 @@ function ShortcutHelp() {
   return (
     <div class="lv-help">
       <b>Keyboard</b>
-      <div><kbd>/</kbd> search</div>
-      <div><kbd>↑</kbd><kbd>↓</kbd> or <kbd>j</kbd><kbd>k</kbd> move</div>
-      <div><kbd>n</kbd> / <kbd>N</kbd> next / previous error</div>
-      <div><kbd>w</kbd> / <kbd>W</kbd> next / previous warning</div>
-      <div><kbd>g</kbd> / <kbd>G</kbd> top / bottom</div>
-      <div><kbd>c</kbd> copy entry</div>
-      <div><kbd>Esc</kbd> close details / clear search</div>
+      <dl>
+        <dt><kbd>/</kbd></dt>
+        <dd>search</dd>
+        <dt><kbd>↑</kbd><kbd>↓</kbd> <kbd>j</kbd><kbd>k</kbd></dt>
+        <dd>move</dd>
+        <dt><kbd>n</kbd> <kbd>N</kbd></dt>
+        <dd>next / previous error</dd>
+        <dt><kbd>w</kbd> <kbd>W</kbd></dt>
+        <dd>next / previous warning</dd>
+        <dt><kbd>g</kbd> <kbd>G</kbd></dt>
+        <dd>top / bottom</dd>
+        <dt><kbd>c</kbd></dt>
+        <dd>copy entry</dd>
+        <dt><kbd>Esc</kbd></dt>
+        <dd>close details / clear search</dd>
+      </dl>
       <b>Search</b>
       <div>terms are ANDed, <code>"exact phrase"</code>, <code>-exclude</code></div>
     </div>
   );
 }
 
-function TimeInput(props: { value: number | null; placeholder: string; timeMode: TimeMode; referenceMs: number; onChange: (ms: number | null) => void }) {
-  const [text, setText] = useState('');
+const timeText = (ms: number, mode: TimeMode) => formatFull(ms, 0, mode).replace('T', ' ').replace(/(\.\d{3})?(Z|[+-]\d{2}:\d{2})$/, '$1');
+
+function TimeInput(props: { value: number | null; label: string; placeholder: string; timeMode: TimeMode; referenceMs: number; onChange: (ms: number | null) => void }) {
+  const shown = (value: number | null, mode: TimeMode) => (value === null ? '' : timeText(value, mode));
+  const [text, setText] = useState(() => shown(props.value, props.timeMode));
   const [invalid, setInvalid] = useState(false);
+  /** Typed but not applied yet (applied on Enter, blur, or when the popover closes). */
+  const pending = useRef<string | null>(null);
+  const latest = useRef(props);
+  latest.current = props;
+  // Follow changes from outside (presets, Clear, UTC / Local). Not on mount: effects run after paint,
+  // and resetting then would drop what was typed right after the popover opened.
+  const synced = useRef(shown(props.value, props.timeMode));
   useEffect(() => {
-    if (props.value === null) setText('');
-    else setText(formatFull(props.value, 0, props.timeMode).replace('T', ' ').replace(/(\.\d{3})?(Z|[+-]\d{2}:\d{2})$/, '$1'));
+    const next = shown(props.value, props.timeMode);
+    if (next === synced.current) return;
+    synced.current = next;
+    setText(next);
     setInvalid(false);
   }, [props.value, props.timeMode]);
-  const commit = () => {
-    if (!text.trim()) {
+  const commit = (value = text): boolean => {
+    pending.current = null;
+    const p = latest.current;
+    if (!value.trim()) {
       setInvalid(false);
-      props.onChange(null);
-      return;
+      if (p.value !== null) p.onChange(null);
+      return true;
     }
-    const ms = parseUserTime(text, props.timeMode, props.referenceMs);
+    const ms = parseUserTime(value, p.timeMode, p.referenceMs);
     setInvalid(ms === null);
-    if (ms !== null) props.onChange(ms);
+    if (ms !== null && ms !== p.value) p.onChange(ms);
+    return ms !== null;
   };
+  useEffect(
+    () => () => {
+      if (pending.current !== null) commit(pending.current);
+    },
+    [],
+  );
   return (
     <input
       class={`lv-input lv-time-input${invalid ? ' lv-invalid' : ''}`}
       value={text}
       placeholder={props.placeholder}
+      aria-label={props.label}
+      spellcheck={false}
       title={`HH:mm[:ss[.SSS]] or YYYY-MM-DD HH:mm:ss (${props.timeMode === 'utc' ? 'UTC' : 'local time'}); Enter to apply`}
-      onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)}
-      onBlur={commit}
+      onInput={(e) => {
+        const v = (e.currentTarget as HTMLInputElement).value;
+        pending.current = v;
+        setText(v);
+      }}
+      onBlur={() => commit()}
       onKeyDown={(e) => {
         if (e.key === 'Enter') commit();
       }}
     />
+  );
+}
+
+/** `09:00:12 – 09:30:00`, `from 09:00:12`, `until 09:30:00` (time of day of the bounds), or '' without a range. */
+function rangeLabel(fromMs: number | null, toMs: number | null, mode: TimeMode): string {
+  const short = (ms: number) => timeText(ms, mode).slice(11, 19);
+  if (fromMs !== null && toMs !== null) return `${short(fromMs)} – ${short(toMs)}`;
+  if (fromMs !== null) return `from ${short(fromMs)}`;
+  return toMs !== null ? `until ${short(toMs)}` : '';
+}
+
+function TimeRange(props: { filter: FilterState; onFilter: (patch: Partial<FilterState>) => void; timeMode: TimeMode; referenceMs: number; lastMs: number }) {
+  const { fromMs, toMs } = props.filter;
+  const active = fromMs !== null || toMs !== null;
+  const label = rangeLabel(fromMs, toMs, props.timeMode) || 'Time';
+  const zone = props.timeMode === 'utc' ? 'UTC' : 'local time';
+  // the log's own first / last time as the example
+  const hint = (ms: number, fallback: string) => (Number.isNaN(ms) ? fallback : timeText(ms, props.timeMode).slice(11, 19));
+  return (
+    <Popover label={<>{label} ▾</>} title={`Time range (${zone})`} buttonClass={active ? 'lv-active' : ''}>
+      {(close) => (
+        <div class="lv-time-picker">
+          <div class="lv-time-fields">
+            <label>
+              <span>From</span>
+              <TimeInput value={fromMs} label="From" placeholder={hint(props.referenceMs, 'from')} timeMode={props.timeMode} referenceMs={props.referenceMs} onChange={(fromMs) => props.onFilter({ fromMs })} />
+            </label>
+            <label>
+              <span>To</span>
+              <TimeInput value={toMs} label="To" placeholder={hint(props.lastMs, 'to')} timeMode={props.timeMode} referenceMs={props.referenceMs} onChange={(toMs) => props.onFilter({ toMs })} />
+            </label>
+          </div>
+          <div class="lv-dim lv-time-hint">HH:mm[:ss.SSS] on the log's day, or YYYY-MM-DD HH:mm; {zone}</div>
+          {!Number.isNaN(props.lastMs) && (
+            <div class="lv-time-presets" role="group" aria-label="Last part of the log">
+              <span class="lv-menu-label" title="Counted back from the newest entry">Last</span>
+              {LAST_RANGES.map(([name, ms]) => (
+                <button
+                  type="button"
+                  class="lv-btn lv-btn-small"
+                  title={`The last ${name} of the log (before its newest entry)`}
+                  onClick={() => {
+                    props.onFilter({ fromMs: props.lastMs - ms, toMs: null });
+                    close();
+                  }}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+          <div class="lv-row-flex lv-time-actions">
+            <span class="lv-grow" />
+            <button type="button" class="lv-btn lv-btn-small" disabled={!active} onClick={() => props.onFilter({ fromMs: null, toMs: null })}>
+              Clear
+            </button>
+            <button type="button" class="lv-btn lv-btn-small lv-primary" onClick={close}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </Popover>
+  );
+}
+
+function LevelChips(props: { present: Level[]; counts: LevelCounts; levels: Level[]; onLevelClick: (level: Level, multi: boolean) => void }) {
+  return (
+    <div class="lv-levels" role="group" aria-label="Levels">
+      {props.present.map((l) => {
+        const solo = props.levels.includes(l);
+        const active = props.levels.length === 0 || solo;
+        const n = props.counts[l];
+        return (
+          <button
+            type="button"
+            class={`lv-level-chip lv-lvl-${l}${active ? '' : ' lv-off'}${solo ? ' lv-solo' : ''}${n ? '' : ' lv-zero'}`}
+            title="Click: show only this level (click again for all). Ctrl/⌘/Shift-click: add or remove."
+            aria-pressed={solo}
+            onClick={(e) => props.onLevelClick(l, e.ctrlKey || e.metaKey || e.shiftKey)}
+          >
+            {l === 'OTHER' ? 'plain' : l} <b>{n.toLocaleString()}</b>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -203,6 +318,9 @@ export function FilterBar(props: {
   onQuery: (q: string) => void;
   filter: FilterState;
   onFilter: (patch: Partial<FilterState>) => void;
+  presentLevels: Level[];
+  counts: LevelCounts;
+  onLevelClick: (level: Level, multi: boolean) => void;
   regexError?: string;
   loggers: [string, number][];
   shown: number;
@@ -212,6 +330,7 @@ export function FilterBar(props: {
   onJump: (kind: 'error' | 'warn', dir: 1 | -1) => void;
   timeMode: TimeMode;
   referenceMs: number;
+  lastMs: number;
   onCopyFiltered: (format: 'text' | 'ndjson') => void;
   onDownload: () => void;
 }) {
@@ -240,6 +359,8 @@ export function FilterBar(props: {
         </button>
       </div>
 
+      <LevelChips present={props.presentLevels} counts={props.counts} levels={f.levels} onLevelClick={props.onLevelClick} />
+
       <Popover label={f.loggers.length ? `Logger (${f.loggers.length})` : 'Logger'} buttonClass={f.loggers.length ? 'lv-active' : ''}>
         {() => {
           const q = loggerQuery.toLowerCase();
@@ -267,8 +388,7 @@ export function FilterBar(props: {
         }}
       </Popover>
 
-      <TimeInput value={f.fromMs} placeholder="from" timeMode={props.timeMode} referenceMs={props.referenceMs} onChange={(fromMs) => props.onFilter({ fromMs })} />
-      <TimeInput value={f.toMs} placeholder="to" timeMode={props.timeMode} referenceMs={props.referenceMs} onChange={(toMs) => props.onFilter({ toMs })} />
+      <TimeRange filter={f} onFilter={props.onFilter} timeMode={props.timeMode} referenceMs={props.referenceMs} lastMs={props.lastMs} />
 
       {f.traceId && (
         <span class="lv-chip lv-trace-chip" title={`traceId ${f.traceId}`}>
@@ -303,6 +423,45 @@ export function FilterBar(props: {
           </div>
         )}
       </Popover>
+    </div>
+  );
+}
+
+/** Shown instead of the list when nothing matches: each active filter can be removed on its own. */
+export function NoMatches(props: {
+  filter: FilterState;
+  query: string;
+  error?: string;
+  hiddenSourceLabels: string[];
+  timeMode: TimeMode;
+  onFilter: (patch: Partial<FilterState>) => void;
+  onQuery: (q: string) => void;
+  onClear: () => void;
+}) {
+  const f = props.filter;
+  const chips: [string, () => void][] = [];
+  if (props.query.trim()) chips.push([`${f.regex ? 'Regex' : 'Search'} “${props.query.trim().slice(0, 40)}”`, () => props.onQuery('')]);
+  if (f.levels.length) chips.push([`Level ${f.levels.map((l) => (l === 'OTHER' ? 'plain' : l)).join(', ')}`, () => props.onFilter({ levels: [] })]);
+  if (f.loggers.length) chips.push([f.loggers.length === 1 ? `Logger ${f.loggers[0].slice(f.loggers[0].lastIndexOf('.') + 1)}` : `${f.loggers.length} loggers`, () => props.onFilter({ loggers: [] })]);
+  if (f.traceId) chips.push([`Trace ${f.traceId.slice(0, 10)}…`, () => props.onFilter({ traceId: '' })]);
+  const range = rangeLabel(f.fromMs, f.toMs, props.timeMode);
+  if (range) chips.push([`Time ${range}`, () => props.onFilter({ fromMs: null, toMs: null })]);
+  if (props.hiddenSourceLabels.length) chips.push([`Hidden ${props.hiddenSourceLabels.join(', ')}`, () => props.onFilter({ hiddenSources: [] })]);
+  return (
+    <div class={`lv-overlay-msg lv-nomatch${props.error ? ' lv-overlay-error' : ''}`} role="status">
+      <div class="lv-nomatch-title">{props.error ? `Search: ${props.error}` : 'No entries match the filters.'}</div>
+      {chips.length > 1 && (
+        <div class="lv-nomatch-chips">
+          {chips.map(([label, remove]) => (
+            <button type="button" class="lv-nomatch-chip" title="Remove this filter" onClick={remove}>
+              {label} <span aria-hidden="true">✕</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <button type="button" class="lv-link" onClick={props.onClear}>
+        Clear {chips.length > 1 ? 'all filters' : 'filters'}
+      </button>
     </div>
   );
 }

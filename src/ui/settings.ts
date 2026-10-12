@@ -3,6 +3,7 @@ import type { TimeMode } from '../core/time';
 export interface Settings {
   timeMode: TimeMode;
   fontSize: number;
+  /** Width of the details panel in px; 0 sizes it to the window until the user drags it. */
   detailsWidth: number;
   showLogger: boolean;
   showThread: boolean;
@@ -13,7 +14,7 @@ export interface Settings {
 export const DEFAULT_SETTINGS: Settings = {
   timeMode: 'utc',
   fontSize: 12,
-  detailsWidth: 520,
+  detailsWidth: 0,
   showLogger: true,
   showThread: false,
   tailSeconds: 5,

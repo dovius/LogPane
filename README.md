@@ -22,15 +22,15 @@ Details: [PRIVACY.md](PRIVACY.md).
 
 - **Readable list**: time, level, logger, message, plus optional thread and source columns. Level-coloured rows. Virtualised, so 50,000+ lines scroll smoothly.
 - **Search**: terms are ANDed, `"exact phrase"`, `-exclude`. Regex and case-sensitive toggles are available. Search covers messages, MDC / structured fields, and exception types and messages.
-- **Filters**: severity chips (click shows only that level, Ctrl/⌘/Shift-click toggles), logger picker, and from/to time.
+- **Filters**: severity chips (click shows only that level, Ctrl/⌘/Shift-click toggles), logger picker, and a time range (from / to, or the last 1 min … 6 hours of the log). When nothing matches, each active filter can be removed on its own.
 - **Related events**: click a trace ID, correlation ID or request ID to see every entry of that request.
-- **Details panel**: all fields, JSON inside messages pretty-printed, and the raw JSON.
-- **Stack traces**: structured exceptions (Quarkus `frames` / `causedBy` / `suppressed`) are shown as normal Java stack traces you can paste into the IDE. Framework frames are dimmed.
+- **Details panel**: the message (JSON inside it pretty-printed), the stack trace, then the fields grouped into trace IDs, context (nested objects flattened) and host / process. Values can be copied or searched one by one; ↑ / ↓ move to the neighbouring entry. The raw JSON is one click away.
+- **Stack traces**: structured exceptions (Quarkus `frames` / `causedBy` / `suppressed`), `stack_trace` strings and plain-text Java traces are shown as normal Java stack traces you can paste into the IDE, with a summary of the cause chain. Framework frames are dimmed and long runs of them folded.
 - **Several logs at once**: add files or Raw URLs, merged by timestamp, so you can follow one trace across services.
 - **Reload and live tail** for Kubernetes / OpenShift pod logs (uses `sinceTime`, pauses in background tabs).
   Some consoles answer the viewer's own requests with 401 and accept only real page loads. There, Reload reloads the tab like F5, and Tail reloads it every ≥ 10 s (shown as **Tail ↻**). Search, filters, selection and scroll position are kept across reloads.
 - **Copy / export**: an entry, its JSON, its stack trace, ±N lines of context, or everything currently shown.
-- **Display options**: dark and light themes (follow the system), UTC or local time, adjustable font size.
+- **Display options** (View menu): UTC or local time, text size, logger and thread columns. Dark and light themes follow the system.
 - **Keyboard**:
 
   | Key | Action |

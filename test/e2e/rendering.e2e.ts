@@ -82,12 +82,16 @@ describe('display settings', () => {
     await page.keyboard.press('g');
     const firstTime = (t: string) => page.waitForFunction((x) => document.querySelector('.lv-list .lv-c-time')?.textContent === x, t);
     await firstTime('09:00:00.000');
+    expect(await page.textContent('.lv-head')).toContain('UTC');
+    await page.click('button:text("View ▾")');
     await page.click('.lv-seg button:text("Local")');
     await firstTime('12:00:00.000'); // Europe/Vilnius, summer time
+    expect(await page.textContent('.lv-head')).toContain('local');
     expect(((await h.storage()).lvSettings as { timeMode: string }).timeMode).toBe('local');
     await page.reload();
     await h.inject(page);
     await waitLoaded(page, orders.total);
+    await page.click('button:text("View ▾")');
     expect(await page.getAttribute('.lv-seg button:text("Local")', 'class')).toContain('lv-on');
     await page.click('.lv-seg button:text("UTC")');
     await page.close();
@@ -98,11 +102,15 @@ describe('display settings', () => {
     await waitLoaded(page, orders.total);
     const height = () => page.$eval('.lv-list .lv-row', (el) => el.getBoundingClientRect().height);
     const before = await height();
+    await page.click('button:text("View ▾")');
+    const smaller = page.locator('.lv-seg button:text("A−")');
     await page.click('.lv-seg button:text("A+")');
     await page.click('.lv-seg button:text("A+")');
     expect(await height()).toBeGreaterThan(before);
-    for (let i = 0; i < 20; i++) await page.click('.lv-seg button:text("A−")');
-    expect(((await h.storage()).lvSettings as { fontSize: number }).fontSize).toBe(9); // clamped
+    expect(await page.textContent('.lv-view-menu')).toContain('14px');
+    for (let i = 0; i < 20 && !(await smaller.isDisabled()); i++) await smaller.click();
+    expect(await smaller.isDisabled()).toBe(true); // clamped
+    expect(((await h.storage()).lvSettings as { fontSize: number }).fontSize).toBe(9);
     for (let i = 0; i < 3; i++) await page.click('.lv-seg button:text("A+")');
     await page.close();
   });

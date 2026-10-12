@@ -104,9 +104,11 @@ describe('formats', () => {
     await waitLoaded(page, 3);
     expect(await levelChips(page)).toEqual({ ERROR: 1, WARN: 1, INFO: 1 });
     await page.locator('.lv-list .lv-row', { hasText: 'Boom' }).click();
-    const message = await page.textContent('.lv-details section .lv-pre');
-    expect(message).toContain('java.lang.IllegalStateException: boom');
-    expect(message).toContain('Caused by: java.io.IOException: disk full');
+    // the first line is the message, the rest is shown as a stack trace
+    expect(await page.textContent('.lv-details .lv-msg')).toContain('Boom');
+    const stack = await page.textContent('.lv-details .lv-stack');
+    expect(stack).toContain('java.lang.IllegalStateException: boom');
+    expect(stack).toContain('Caused by: java.io.IOException: disk full');
     await page.close();
   });
 

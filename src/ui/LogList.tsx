@@ -40,10 +40,12 @@ export function gridTemplate(cols: Columns, withDate: boolean, narrow = false): 
   ].filter(Boolean).join(' ');
 }
 
-export function ColumnHeader({ cols }: { cols: Columns }) {
+export function ColumnHeader({ cols, timeMode }: { cols: Columns; timeMode: TimeMode }) {
   return (
     <div class="lv-row lv-head" role="row">
-      <span>Time</span>
+      <span>
+        Time <span class="lv-head-note">{timeMode === 'utc' ? 'UTC' : 'local'}</span>
+      </span>
       <span>Level</span>
       {cols.source && <span>Source</span>}
       {cols.logger && <span>Logger</span>}

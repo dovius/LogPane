@@ -13,7 +13,7 @@ import { ColumnHeader, LogList, gridTemplate, type ListApi } from './LogList';
 import { saveSettings, type Settings } from './settings';
 import { isRejected, type LogStore } from './store';
 import { RELOAD_TAIL_MIN_SECONDS, type ViewState } from './viewState';
-import { FilterBar, Header } from './Toolbar';
+import { FilterBar, Header, NoMatches } from './Toolbar';
 
 /** Suggestion shown after a manual open on a Raw log page: open these automatically from now on. */
 export interface AutoPrompt {
@@ -118,6 +118,12 @@ export function App(props: AppProps) {
     for (let i = entries.length - 1; i >= 0 && !last; i--) if (!Number.isNaN(entries[i].tsMs)) last = entries[i];
     return [first?.tsMs ?? Number.NaN, last?.tsMs ?? Number.NaN];
   }, [entries]);
+  /** Levels in the whole log: their chips stay put while filters change the counts. */
+  const presentLevels = useMemo(() => {
+    const seen = new Set<Level>();
+    for (const e of entries) seen.add(e.level);
+    return LEVELS.filter((l) => seen.has(l) || filter.levels.includes(l));
+  }, [entries, filter.levels]);
   const withDate = !Number.isNaN(firstMs) && dayKey(firstMs, settings.timeMode) !== dayKey(lastMs, settings.timeMode);
   const selectedPos = useMemo(() => positionOf(indices, entries, selected), [indices, entries, selected]);
   const rowHeight = Math.round(settings.fontSize * 1.7);
@@ -356,7 +362,7 @@ export function App(props: AppProps) {
     const handle = e.currentTarget as HTMLElement;
     const rect = rootRef.current!.getBoundingClientRect();
     handle.setPointerCapture(e.pointerId);
-    let width = detailsWidth;
+    let width = detailsWidth || Math.round(handle.parentElement!.getBoundingClientRect().width);
     const onMove = (ev: PointerEvent) => {
       width = Math.round(Math.max(300, Math.min(rect.width - 320, rect.right - ev.clientX)));
       setDetailsWidth(width);
@@ -451,7 +457,7 @@ export function App(props: AppProps) {
     '--lv-row-h': `${rowHeight}px`,
     '--lv-cols': gridTemplate(cols, withDate),
     '--lv-cols-narrow': gridTemplate(cols, withDate, true),
-    '--lv-details-w': `${detailsWidth}px`,
+    '--lv-details-w': detailsWidth ? `${detailsWidth}px` : undefined,
   };
 
   return (
@@ -485,9 +491,6 @@ export function App(props: AppProps) {
             }
             onRemoveSource={removeSource}
             onAdd={() => setAdding(true)}
-            counts={result.counts}
-            levels={filter.levels}
-            onLevelClick={onLevelClick}
             canRefetch={store.hasRefetchable}
             busy={busy || Boolean(loadingSource)}
             onReload={() => void reload()}
@@ -505,6 +508,9 @@ export function App(props: AppProps) {
             onQuery={setQuery}
             filter={filter}
             onFilter={patchFilter}
+            presentLevels={presentLevels}
+            counts={result.counts}
+            onLevelClick={onLevelClick}
             regexError={result.error}
             loggers={loggers}
             shown={indices.length}
@@ -514,6 +520,7 @@ export function App(props: AppProps) {
             onJump={jump}
             timeMode={settings.timeMode}
             referenceMs={firstMs}
+            lastMs={lastMs}
             onCopyFiltered={onCopyFiltered}
             onDownload={onDownload}
           />
@@ -552,7 +559,7 @@ export function App(props: AppProps) {
             <EmptyState onFiles={(f) => void addFiles(f)} onPaste={addPaste} />
           ) : (
             <>
-              <ColumnHeader cols={cols} />
+              <ColumnHeader cols={cols} timeMode={settings.timeMode} />
               <LogList
                 entries={entries}
                 indices={indices}
@@ -573,12 +580,16 @@ export function App(props: AppProps) {
                 </div>
               )}
               {!loadingSource && entries.length > 0 && indices.length === 0 && (
-                <div class={`lv-overlay-msg${result.error ? ' lv-overlay-error' : ''}`}>
-                  {result.error ? `Search: ${result.error}` : 'No entries match the filters.'}{' '}
-                  <button type="button" class="lv-link" onClick={clearFilters}>
-                    Clear filters
-                  </button>
-                </div>
+                <NoMatches
+                  filter={filter}
+                  query={query}
+                  error={result.error}
+                  hiddenSourceLabels={filter.hiddenSources.map((id) => sources.get(id)?.label ?? '').filter(Boolean)}
+                  timeMode={settings.timeMode}
+                  onFilter={patchFilter}
+                  onQuery={setQuery}
+                  onClear={clearFilters}
+                />
               )}
             </>
           )}
@@ -589,6 +600,11 @@ export function App(props: AppProps) {
             source={sources.get(selected.sourceId)}
             timeMode={settings.timeMode}
             contextLines={settings.contextLines}
+            canPrev={selectedPos > 0}
+            canNext={selectedPos >= 0 && selectedPos < indices.length - 1}
+            onPrev={() => move(-1)}
+            onNext={() => move(1)}
+            onCopyText={(text, what) => void copy(text, what)}
             onResizeStart={onResizeStart}
             onClose={() => setSelected(null)}
             onFilterTrace={(traceId) => {
@@ -620,17 +636,41 @@ export function App(props: AppProps) {
   );
 }
 
+/** The toolbar icon, drawn inline (a spotlit pane with log lines under a red bar) so it needs no file. */
+function BrandMark() {
+  return (
+    <svg class="lv-brand-mark" viewBox="0 0 16 16" aria-hidden="true">
+      <rect width="16" height="16" rx="3.5" fill="#17181b" />
+      <rect x="2.5" y="2.5" width="11" height="2.2" rx="0.6" fill="#d8322b" />
+      <rect x="2.5" y="6" width="11" height="7.5" rx="0.8" fill="#eceae4" />
+      <rect x="4" y="7.8" width="6.5" height="1.3" rx="0.4" fill="#17181b" />
+      <rect x="4" y="10.4" width="4.5" height="1.3" rx="0.4" fill="#17181b" />
+    </svg>
+  );
+}
+
 function EmptyState(props: { onFiles: (files: File[]) => void; onPaste: (text: string) => void }) {
   const [text, setText] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   return (
     <div class="lv-empty">
-      <h1>LogPane</h1>
+      <div class="lv-brand">
+        <BrandMark />
+        <h1>LogPane</h1>
+      </div>
       <p class="lv-tagline">Structured logs, without the noise.</p>
-      <p>Drop a <code>.log</code> file anywhere on this page, paste log text (<kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd>), or</p>
-      <button type="button" class="lv-btn lv-primary" onClick={() => fileRef.current?.click()}>
-        Choose files…
-      </button>
+      <div class="lv-dropzone">
+        <div class="lv-dropzone-title">
+          Drop <code>.log</code> files anywhere on this page
+        </div>
+        <div class="lv-dim">JSON lines or plain text. Several files are merged by time.</div>
+        <button type="button" class="lv-btn lv-primary" onClick={() => fileRef.current?.click()}>
+          Choose files…
+        </button>
+      </div>
+      <div class="lv-or">
+        or paste log text below (or <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>V</kbd> anywhere)
+      </div>
       <input
         ref={fileRef}
         type="file"
@@ -642,14 +682,14 @@ function EmptyState(props: { onFiles: (files: File[]) => void; onPaste: (text: s
         class="lv-input"
         rows={6}
         spellcheck={false}
-        placeholder="…or paste JSON log lines here"
+        placeholder={'{"timestamp":"2026-10-01T09:30:00Z","level":"INFO","message":"…"}'}
         value={text}
         onInput={(e) => setText((e.currentTarget as HTMLTextAreaElement).value)}
       />
       <button type="button" class="lv-btn" disabled={!text.trim()} onClick={() => props.onPaste(text)}>
         Open pasted text
       </button>
-      <p class="lv-dim">Everything stays in this browser tab. Nothing is uploaded anywhere.</p>
+      <p class="lv-dim lv-privacy">Everything stays in this browser tab. Nothing is uploaded anywhere.</p>
     </div>
   );
 }

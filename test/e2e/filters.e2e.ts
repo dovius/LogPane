@@ -145,6 +145,7 @@ describe('logger picker', () => {
 
 describe('time range', () => {
   it('from/to accept HH:mm:ss on the log day (UTC) and mark invalid input', async () => {
+    await page.click('.lv-filterbar button:text("Time")');
     const from = page.locator('.lv-time-input').nth(0);
     const to = page.locator('.lv-time-input').nth(1);
     await from.fill('09:00:03');
@@ -165,6 +166,7 @@ describe('time range', () => {
     await to.fill('');
     await to.press('Enter');
     await waitCounts(page, orders.total, orders.total);
+    await page.keyboard.press('Escape');
   });
 });
 
@@ -172,7 +174,7 @@ describe('trace filter', () => {
   it('clicking the traceId in details shows the whole request; the chip clears it', async () => {
     await search(page, 'ORD-10007');
     await clickRow(page, 'Order created');
-    await page.click(`.lv-fields button.lv-link:text("${KNOWN_TRACE}")`);
+    await page.click(`.lv-frows button.lv-link:text("${KNOWN_TRACE}")`);
     await search(page, '');
     await waitCounts(page, 3, orders.total);
     expect(await page.textContent('.lv-trace-chip')).toContain(KNOWN_TRACE.slice(0, 10));
@@ -183,7 +185,7 @@ describe('trace filter', () => {
   it('filters combine (trace + level + search) and Clear filters resets all', async () => {
     await search(page, 'ORD-10024');
     await clickRow(page, 'Checkout failed');
-    await page.click('.lv-fields button.lv-link[title="Show all related entries"]');
+    await page.click('.lv-frows button.lv-link[title="Show all entries of this trace"]');
     await page.click('.lv-level-chip.lv-lvl-ERROR');
     await search(page, 'declined');
     await waitCounts(page, 1, orders.total);

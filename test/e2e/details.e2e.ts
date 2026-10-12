@@ -31,8 +31,8 @@ describe('details panel', () => {
   it('shows the message with its JSON payload pretty-printed', async () => {
     await search(page, 'ORD-10042');
     await clickRow(page, 'Order created');
-    expect(await page.textContent('.lv-details section .lv-pre')).toBe('Order created:');
-    const json = await page.textContent('.lv-details section .lv-json');
+    expect(await page.textContent('.lv-details .lv-msg-text')).toBe('Order created:');
+    const json = await page.textContent('.lv-details .lv-json-card .lv-json');
     expect(json).toContain('"orderId": "ORD-10042"');
     expect(json).toContain('"qty": 1');
   });
@@ -40,35 +40,39 @@ describe('details panel', () => {
   it('renders a structured exception as a Java stack trace', async () => {
     await search(page, 'ORD-10024');
     await clickRow(page, 'Checkout failed');
-    const chain = await page.$$eval('.lv-chain li b', (els) => els.map((e) => e.textContent));
+    const chain = await page.$$eval('.lv-chain .lv-chain-type', (els) => els.map((e) => e.textContent));
     expect(chain).toEqual(['PaymentDeclinedException', 'ClientWebApplicationException']);
     const stack = (await page.textContent('.lv-stack')) ?? '';
     expect(stack).toContain('com.example.orders.payment.PaymentDeclinedException: Payment for order ORD-10024 was declined');
     expect(stack).toContain('at com.example.orders.service.CheckoutService.checkout(CheckoutService.java:142)');
     expect(stack).toContain('Caused by: org.jboss.resteasy.reactive.ClientWebApplicationException: Payment Required, status code 402');
-    // framework frames are dimmed, application frames are not
+    // framework frames are dimmed, application frames are not; the exception type stands out
     const classes = await page.$$eval('.lv-stack > div', (els) => els.map((e) => [e.textContent?.trim(), e.className]));
-    expect(classes.find(([t]) => t?.startsWith('at java.lang.Thread'))?.[1]).toBe('lv-dim');
-    expect(classes.find(([t]) => t?.startsWith('at com.example.orders.api'))?.[1]).toBe('lv-app-frame');
+    expect(classes.find(([t]) => t?.startsWith('at java.lang.Thread'))?.[1]).toContain('lv-sl-framework');
+    expect(classes.find(([t]) => t?.startsWith('at com.example.orders.api'))?.[1]).toContain('lv-sl-app');
+    expect(await page.textContent('.lv-stack .lv-sl-exception .lv-sl-type')).toBe('com.example.orders.payment.PaymentDeclinedException');
   });
 
   it('lists fields with UTC and local time, source, logger, thread, sequence and MDC', async () => {
     await search(page, 'ORD-10007');
     await clickRow(page, 'Order created');
-    const fields = await page.$$eval('.lv-fields dt', (els) => els.map((e) => e.textContent));
-    expect(fields).toEqual(expect.arrayContaining(['Time', 'Source', 'Logger', 'Thread', 'Sequence', 'mdc.traceId', 'mdc.spanId', 'hostName']));
-    const time = (await page.textContent('.lv-fields dd')) ?? '';
-    expect(time).toMatch(/2026-10-01T09:00:02\.10\d+Z/);
-    expect(time).toMatch(/2026-10-01T12:00:02\.10\d+\+03:00 \(local\)/);
-    expect(await page.textContent('.lv-details-title')).toMatch(/^2026-10-01T09:00:02\.10/);
+    const fields = await page.$$eval('.lv-frows .lv-fkey', (els) => els.map((e) => e.textContent));
+    expect(fields).toEqual(expect.arrayContaining(['Time', 'Source', 'Logger', 'Thread', 'Sequence', 'traceId', 'spanId', 'hostName']));
+    const time = (await page.textContent('.lv-frows .lv-fval')) ?? '';
+    expect(time).toMatch(/2026-10-01 09:00:02\.10\d+ UTC/);
+    expect(time).toMatch(/2026-10-01 12:00:02\.10\d+ UTC\+03:00/);
+    expect(await page.textContent('.lv-details-title')).toMatch(/^2026-10-01 09:00:02\.10\d+ UTC$/);
+    // MDC ids are grouped under Trace, bookkeeping under Host & process (collapsed)
+    expect(await page.textContent('.lv-dsec:has(h3:text-is("Trace"))')).toContain(KNOWN_TRACE);
+    expect(await page.$eval('details:has(summary:text("Host & process"))', (el) => (el as HTMLDetailsElement).open)).toBe(false);
   });
 
   it('logger link filters by logger; raw JSON can be expanded', async () => {
     await search(page, 'ORD-10007');
     await clickRow(page, 'Order created');
-    await page.click('.lv-details summary');
-    expect(await page.textContent('.lv-details details .lv-json')).toContain(`"traceId": "${KNOWN_TRACE}"`);
-    await page.click('.lv-fields button.lv-link:text("com.example.orders.service.CheckoutService")');
+    await page.click('.lv-details summary:text("Raw JSON")');
+    expect(await page.textContent('.lv-details details[open] .lv-json')).toContain(`"traceId": "${KNOWN_TRACE}"`);
+    await page.click('.lv-frows button.lv-link:text("com.example.orders.service.CheckoutService")');
     await search(page, '');
     await waitCounts(page, 100 + orders.counts.ERROR, orders.total); // "Order created" per cycle + "Checkout failed"
   });
@@ -139,7 +143,7 @@ describe('copy', () => {
     await clickRow(page, 'Checkout failed');
     const json = JSON.parse(await captureCopy(page, () => page.click('button:text("Copy JSON")')));
     expect(json.message).toBe('Checkout failed for ORD-10024: payment declined');
-    const stack = await captureCopy(page, () => page.click('button:text("Copy stack trace")'));
+    const stack = await captureCopy(page, () => page.click('button[aria-label="Copy stack trace"]'));
     expect(stack.split('\n')[0]).toBe('com.example.orders.payment.PaymentDeclinedException: Payment for order ORD-10024 was declined');
     const context = await captureCopy(page, () => page.click('button:text("Copy ±20 lines")'));
     expect(context.split('\n').filter((l) => /^2026-/.test(l)).length).toBe(41);
