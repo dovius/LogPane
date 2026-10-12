@@ -22,14 +22,18 @@ export interface ListApi {
 
 const OVERSCAN = 12;
 
-export function gridTemplate(cols: Columns, withDate: boolean): string {
+/**
+ * Source / logger / thread shrink before the message does, so the message keeps at least 24ch.
+ * `narrow` (phones) uses fixed columns and lets the message take whatever is left.
+ */
+export function gridTemplate(cols: Columns, withDate: boolean, narrow = false): string {
   return [
     withDate ? '19ch' : '13ch',
     '6ch',
-    cols.source ? '26ch' : '',
-    cols.logger ? '26ch' : '',
-    cols.thread ? '20ch' : '',
-    'minmax(0, 1fr)',
+    cols.source ? (narrow ? '16ch' : 'minmax(10ch, 26ch)') : '',
+    cols.logger ? (narrow ? '20ch' : 'minmax(10ch, 26ch)') : '',
+    cols.thread ? (narrow ? '14ch' : 'minmax(8ch, 20ch)') : '',
+    narrow ? 'minmax(0, 1fr)' : 'minmax(24ch, 1fr)',
   ].filter(Boolean).join(' ');
 }
 

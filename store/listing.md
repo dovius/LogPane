@@ -67,12 +67,16 @@ Supported formats, for reference:
 
 | File | Use | Size |
 | --- | --- | --- |
-| `../static/icons/icon128.png` | Store icon | 128×128 |
-| `screenshot-1-stack-trace.png` | Screenshot: error with readable stack trace | 1280×800 |
-| `screenshot-2-trace-across-services.png` | Screenshot: one trace across two services, JSON payload (dark) | 1280×800 |
-| `screenshot-3-search-filter.png` | Screenshot: search + ERROR/WARN filter across two logs | 1280×800 |
-| `screenshot-4-file-viewer.png` | Screenshot: local file viewer | 1280×800 |
-| `promo-small-440x280.png` | Small promo tile | 440×280 |
+| `../static/icons/icon128.png` | Store icon (96×96 artwork, 16 px transparent padding) | 128×128 |
+| `screenshot-1-stack-trace.png` | Error with a readable stack trace | 1280×800 |
+| `screenshot-2-trace-across-services.png` | One trace across two services, JSON payload (dark) | 1280×800 |
+| `screenshot-3-search-filter.png` | Search + ERROR/WARN filter across two logs | 1280×800 |
+| `screenshot-4-add-log.png` | Adding another log (file / URL / paste) | 1280×800 |
+| `screenshot-5-file-viewer.png` | Local file viewer | 1280×800 |
+| `promo-small-440x280.png` | Small promo tile (required for good placement) | 440×280 |
+| `promo-marquee-1400x560.png` | Marquee promo tile (optional, needed for marquee features) | 1400×560 |
+
+Screenshots are rendered at 1.25× from a 1024×640 layout, so text stays readable when the store shows them at 640×400.
 
 ## Privacy practices tab
 
@@ -89,10 +93,14 @@ Supported formats, for reference:
 
 **Remote code:** No, I am not using remote code. All JavaScript is bundled in the package.
 
-**Data usage:** LogPane does not collect or transmit user data. Log text is processed in memory, on the device only, and is never sent anywhere. In the data-type checklist, tick nothing. If a reviewer asks, explain that "website content" is read locally only and never leaves the browser. Then tick all three certifications:
-- not sold to third parties;
-- not used for unrelated purposes;
-- not used for creditworthiness.
+**Data usage:** the User Data FAQ requires disclosing user data even when it is processed only locally ("Extensions are required to disclose how they handle user data, even when data is processed or stored locally"). Page and file text count as user data, so:
+- Tick **Website content** only. That is the log text LogPane reads from the current page or from files you open.
+- Leave everything else unticked: personally identifiable info, health, financial, authentication, personal communications, location, web history, user activity.
+- Tick all three certifications:
+  - I do not sell or transfer user data to third parties, outside of the approved use cases.
+  - I do not use or transfer user data for purposes that are unrelated to my item's single purpose.
+  - I do not use or transfer user data to determine creditworthiness or for lending purposes.
+- Reviewer note, if asked: "Log text is read only to display it. It is processed in memory in the tab and never transmitted or stored. Extension pages enforce `connect-src 'none'`."
 
 **Privacy policy URL:** `https://github.com/dovius/LogPane/blob/main/PRIVACY.md`
 
@@ -110,6 +118,8 @@ Supported formats, for reference:
 
 **Developer account** (Chrome Web Store dashboard)
 - [ ] Register with a personal Google account. Use a personal contact email; it is shown to users.
+- [ ] Turn on 2-Step Verification (mandatory for publishing), ideally with a security key.
+- [ ] Verify the contact email. Enforcement notices go there.
 - [ ] Pay the one-time registration fee.
 - [ ] Trader declaration (EU Digital Services Act): a free, non-commercial open-source hobby project is normally **non-trader**. Declare "trader" only if you sell it or use it professionally to make money. A trader's name, address and contact are published.
 
@@ -117,3 +127,12 @@ Supported formats, for reference:
 - [ ] `npm ci && npm test && npm run zip` → upload `logpane-extension.zip`. It includes `LICENSE` and `THIRD_PARTY_LICENSES.txt` (Preact, MIT).
 - [ ] Fill in the privacy practices tab as above. Use the description with the trademark notice at the end.
 - [ ] Optionally replace `LogPane contributors` in `LICENSE` with your name.
+
+**Review**
+- Expect a longer, in-depth review: `optional_host_permissions` covers all sites (`https://*/*`, `http://*/*`). They are only requested per domain at runtime; say so in the host permission justification.
+- Before uploading, test the zip in a clean Chrome profile: Load unpacked → Raw page → toolbar button → options → add a domain → auto-open.
+- Distribution: keep "Public" and all regions. Visibility can start as "Unlisted" for a soft launch.
+
+**After publishing**
+- The same zip can be submitted to Microsoft Edge Add-ons (partner.microsoft.com). No code changes are needed.
+- Every update needs a higher `version` in `static/manifest.json` (and `package.json`).

@@ -349,6 +349,7 @@ export function App(props: AppProps) {
     '--lv-font': `${settings.fontSize}px`,
     '--lv-row-h': `${rowHeight}px`,
     '--lv-cols': gridTemplate(cols, withDate),
+    '--lv-cols-narrow': gridTemplate(cols, withDate, true),
     '--lv-details-w': `${detailsWidth}px`,
   };
 

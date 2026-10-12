@@ -40,6 +40,13 @@ Network access is also blocked technically:
 
 Log content, search terms, filters and log URLs are **never** stored.
 
+## Chrome Web Store User Data Policy
+
+LogPane's use of the data it handles complies with the [Chrome Web Store User Data Policy](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq), including the [Limited Use](https://developer.chrome.com/docs/webstore/program-policies/limited-use) requirements.
+
+- Log text ("website content") is used only to display it to you. That is LogPane's single purpose.
+- It is never transferred, sold, used for advertising or creditworthiness, or read by humans.
+
 ## What LogPane does not do
 
 - No analytics, telemetry, crash reporting or tracking SDKs.

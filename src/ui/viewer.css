@@ -813,6 +813,12 @@ mark.lv-hit {
   margin-bottom: 6px;
 }
 
+@media (max-width: 700px) {
+  .lv-row {
+    grid-template-columns: var(--lv-cols-narrow);
+  }
+}
+
 @media (max-width: 900px) {
   .lv-details {
     position: absolute;

@@ -62,15 +62,20 @@ function colourAt(u, v) {
   return BG;
 }
 
-function draw(size) {
+/**
+ * `pad` px of transparent margin on each side. The Web Store asks for 96×96 artwork inside the 128×128
+ * store icon. That margin gets a faint light glow so the dark tile still stands out on dark backgrounds.
+ */
+function draw(size, pad = 0) {
   const ss = 4;
+  const art = size - 2 * pad;
   const buf = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       let r = 0, g = 0, b = 0, a = 0;
       for (let sy = 0; sy < ss; sy++) {
         for (let sx = 0; sx < ss; sx++) {
-          const c = colourAt(((x + (sx + 0.5) / ss) / size) * 16, ((y + (sy + 0.5) / ss) / size) * 16);
+          const c = colourAt(((x - pad + (sx + 0.5) / ss) / art) * 16, ((y - pad + (sy + 0.5) / ss) / art) * 16);
           if (c) {
             r += c[0];
             g += c[1];
@@ -80,17 +85,31 @@ function draw(size) {
         }
       }
       const i = (y * size + x) * 4;
-      if (a) {
-        buf[i] = Math.round(r / a);
-        buf[i + 1] = Math.round(g / a);
-        buf[i + 2] = Math.round(b / a);
+      const cover = a / (ss * ss);
+      // glow: distance outside the rounded tile, in px
+      const glow = pad ? Math.max(0, 0.22 * (1 - outsideDistance(x + 0.5 - pad, y + 0.5 - pad, art) / 6)) * (1 - cover) : 0;
+      const alpha = cover + glow;
+      if (alpha > 0) {
+        buf[i] = Math.round((r / Math.max(a, 1)) * (cover / alpha) + 255 * (glow / alpha));
+        buf[i + 1] = Math.round((g / Math.max(a, 1)) * (cover / alpha) + 255 * (glow / alpha));
+        buf[i + 2] = Math.round((b / Math.max(a, 1)) * (cover / alpha) + 255 * (glow / alpha));
       }
-      buf[i + 3] = Math.round((a / (ss * ss)) * 255);
+      buf[i + 3] = Math.round(Math.min(1, alpha) * 255);
     }
   }
   return png(size, buf);
 }
 
+/** Distance in px from the rounded tile (side `art`, radius 3.2/16 of it); 0 inside. */
+function outsideDistance(px, py, art) {
+  const r = (3.2 / 16) * art;
+  const dx = Math.max(r - px, 0, px - (art - r));
+  const dy = Math.max(r - py, 0, py - (art - r));
+  return Math.max(0, Math.hypot(dx, dy) - r);
+}
+
 mkdirSync(outDir, { recursive: true });
-for (const size of [16, 32, 48, 128]) writeFileSync(join(outDir, `icon${size}.png`), draw(size));
+// Toolbar sizes use the full canvas; the 128 store icon follows the 96 + 2×16 padding rule.
+for (const size of [16, 32, 48]) writeFileSync(join(outDir, `icon${size}.png`), draw(size));
+writeFileSync(join(outDir, 'icon128.png'), draw(128, 16));
 console.log(`icons written to ${outDir}`);

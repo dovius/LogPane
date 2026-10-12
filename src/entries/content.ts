@@ -54,8 +54,8 @@ async function main(): Promise<void> {
   });
   void store.addText({ label, kind: 'page', url: location.href }, text);
 
-  chrome.runtime.onMessage.addListener((msg: { type?: string }) => {
-    if (msg?.type === 'lv-toggle') toggleRaw();
+  chrome.runtime.onMessage.addListener((msg: { type?: unknown }, sender) => {
+    if (sender.id === chrome.runtime.id && msg?.type === 'lv-toggle') toggleRaw();
   });
 }
 

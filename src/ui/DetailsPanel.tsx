@@ -62,7 +62,7 @@ export function DetailsPanel(props: {
         <CopyButton label={`Copy ±${props.contextLines} lines`} title="Copy this entry with surrounding lines (unfiltered)" onCopy={() => props.onCopy('context')} />
       </div>
 
-      <div class="lv-details-body">
+      <div class="lv-details-body" key={`${e.sourceId}:${e.lineNo}`}>
         <section>
           <h3>Message</h3>
           {embedded ? (

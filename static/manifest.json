@@ -35,6 +35,6 @@
   ],
   "options_page": "options.html",
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'none'"
+    "extension_pages": "default-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"
   }
 }

@@ -1,4 +1,4 @@
-import { AUTO_ORIGINS_KEY, AUTO_SCRIPT_ID, RAW_LOG_PATH, getAutoOrigins, originPattern } from './autoOrigins';
+import { AUTO_ORIGINS_KEY, AUTO_SCRIPT_ID, RAW_LOG_PATH, getAutoOrigins, normalizeOrigin, originPattern } from './autoOrigins';
 
 const TEXT_TYPES = ['text/plain', 'application/json', 'application/x-ndjson', 'application/jsonl'];
 
@@ -33,11 +33,12 @@ chrome.action.onClicked.addListener(async (tab) => {
   await openViewerTab();
 });
 
-chrome.runtime.onMessage.addListener((msg: { type?: string; origin?: string }) => {
-  if (msg?.type === 'lv-open-options') {
-    const query = msg.origin ? `?add=${encodeURIComponent(msg.origin)}` : '';
-    void chrome.tabs.create({ url: chrome.runtime.getURL(`options.html${query}`) });
-  }
+// Content scripts live in untrusted pages: accept only our own sender and a well-formed origin.
+chrome.runtime.onMessage.addListener((msg: { type?: unknown; origin?: unknown }, sender) => {
+  if (sender.id !== chrome.runtime.id || msg?.type !== 'lv-open-options') return;
+  const origin = typeof msg.origin === 'string' ? normalizeOrigin(msg.origin) : null;
+  const query = origin ? `?add=${encodeURIComponent(origin)}` : '';
+  void chrome.tabs.create({ url: chrome.runtime.getURL(`options.html${query}`) });
 });
 
 /** Keeps the registered content script in sync with the enabled (and still permitted) origins. */
