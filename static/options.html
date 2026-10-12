@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>LogPane – Options</title>
+    <style>
+      :root {
+        --bg: #ffffff; --fg: #1f2328; --dim: #656d76; --border: #d0d7de; --accent: #0969da; --err: #cf222e; --panel: #f6f8fa;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root { --bg: #0d1117; --fg: #e6edf3; --dim: #8d96a0; --border: #30363d; --accent: #4493f8; --err: #f85149; --panel: #161b22; }
+      }
+      body { background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; }
+      main { max-width: 720px; margin: 0 auto; padding: 32px 16px; }
+      h1 { font-size: 20px; margin: 0 0 4px; }
+      h2 { font-size: 15px; margin: 28px 0 8px; }
+      p { margin: 6px 0; }
+      .dim { color: var(--dim); }
+      code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--panel); padding: 1px 5px; border-radius: 4px; }
+      ul { list-style: none; padding: 0; margin: 0; border: 1px solid var(--border); border-radius: 8px; }
+      li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; }
+      li + li { border-top: 1px solid var(--border); }
+      form { display: flex; gap: 8px; margin-top: 12px; }
+      input { flex: 1; min-width: 0; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
+      button { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      #pending { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; margin: 20px 0; border: 1px solid var(--accent); border-radius: 8px; }
+      #pending[hidden] { display: none; }
+      #status { min-height: 1.5em; margin-top: 12px; color: var(--dim); }
+      #status.error { color: var(--err); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>LogPane</h1>
+      <p class="dim">Everything runs locally in your browser. No data leaves the page.</p>
+
+      <div id="pending" hidden></div>
+
+      <h2>Open automatically</h2>
+      <p>
+        On these domains LogPane replaces Kubernetes / OpenShift “Raw” pod log pages
+        (<code>/api/kubernetes/api/v1/namespaces/…/pods/…/log</code>) automatically. Chrome asks for
+        access to each domain once. Without this, click the toolbar button on a Raw page.
+      </p>
+      <ul id="origins"></ul>
+      <form id="add-form">
+        <input id="origin-input" placeholder="https://console-openshift-console.apps.example.com" autocomplete="off" />
+        <button type="submit" class="primary">Add domain</button>
+      </form>
+      <div id="status" role="status"></div>
+
+      <h2>Other ways to open logs</h2>
+      <p>
+        Click the toolbar button on any other page to open the file viewer: drop downloaded
+        <code>.log</code> files or paste log text. To open local files directly from
+        <code>file://</code>, enable “Allow access to file URLs” on the extension’s details page.
+      </p>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

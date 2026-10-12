@@ -1,0 +1,184 @@
+import type { RefObject } from 'preact';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { mayContainJson } from '../core/embedded';
+import { highlightPieces } from '../core/filter';
+import { formatTime, type TimeMode } from '../core/time';
+import type { LogEntry, SourceInfo } from '../core/types';
+import { abbreviateLogger, listText } from './format';
+import { Pieces } from './widgets';
+
+export interface Columns {
+  source: boolean;
+  logger: boolean;
+  thread: boolean;
+}
+
+export interface ListApi {
+  scrollToPos(pos: number, align: 'nearest' | 'center'): void;
+  scrollToEdge(edge: 'top' | 'bottom'): void;
+  /** First and last fully visible positions. */
+  visibleRange(): [number, number];
+}
+
+const OVERSCAN = 12;
+
+export function gridTemplate(cols: Columns, withDate: boolean): string {
+  return [
+    withDate ? '19ch' : '13ch',
+    '6ch',
+    cols.source ? '26ch' : '',
+    cols.logger ? '26ch' : '',
+    cols.thread ? '20ch' : '',
+    'minmax(0, 1fr)',
+  ].filter(Boolean).join(' ');
+}
+
+export function ColumnHeader({ cols }: { cols: Columns }) {
+  return (
+    <div class="lv-row lv-head" role="row">
+      <span>Time</span>
+      <span>Level</span>
+      {cols.source && <span>Source</span>}
+      {cols.logger && <span>Logger</span>}
+      {cols.thread && <span>Thread</span>}
+      <span>Message</span>
+    </div>
+  );
+}
+
+export function LogList(props: {
+  entries: readonly LogEntry[];
+  indices: readonly number[];
+  selected: LogEntry | null;
+  flash: LogEntry | null;
+  onSelect: (e: LogEntry | null) => void;
+  rowHeight: number;
+  highlight: RegExp | null;
+  timeMode: TimeMode;
+  withDate: boolean;
+  cols: Columns;
+  sources: ReadonlyMap<number, SourceInfo>;
+  apiRef: RefObject<ListApi>;
+}) {
+  const { entries, indices, rowHeight: rowH } = props;
+  const ref = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [height, setHeight] = useState(600);
+  const atBottom = useRef(true);
+  const total = indices.length;
+
+  useEffect(() => {
+    const el = ref.current!;
+    const ro = new ResizeObserver(() => setHeight(el.clientHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  props.apiRef.current = {
+    scrollToPos(pos, align) {
+      const el = ref.current;
+      if (!el || pos < 0) return;
+      const top = pos * rowH;
+      if (align === 'center') el.scrollTop = Math.max(0, top - (el.clientHeight - rowH) / 2);
+      else if (top < el.scrollTop) el.scrollTop = top;
+      else if (top + rowH > el.scrollTop + el.clientHeight) el.scrollTop = top + rowH - el.clientHeight;
+    },
+    scrollToEdge(edge) {
+      const el = ref.current;
+      if (el) el.scrollTop = edge === 'top' ? 0 : el.scrollHeight;
+    },
+    visibleRange() {
+      const el = ref.current;
+      if (!el || total === 0) return [0, total - 1];
+      const first = Math.min(total - 1, Math.ceil(el.scrollTop / rowH));
+      const last = Math.max(first, Math.min(total - 1, Math.floor((el.scrollTop + el.clientHeight) / rowH) - 1));
+      return [first, last];
+    },
+  };
+
+  // Stick to the bottom while new lines arrive (tail), like `tail -f`.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
+  }, [total]);
+
+  const onScroll = (e: Event) => {
+    const el = e.currentTarget as HTMLDivElement;
+    atBottom.current = el.scrollTop + el.clientHeight >= el.scrollHeight - rowH;
+    setScrollTop(el.scrollTop);
+  };
+
+  const start = Math.max(0, Math.floor(scrollTop / rowH) - OVERSCAN);
+  const end = Math.min(total, Math.ceil((scrollTop + height) / rowH) + OVERSCAN);
+  const rows = [];
+  for (let pos = start; pos < end; pos++) {
+    const e = entries[indices[pos]];
+    rows.push(
+      <Row
+        key={`${e.sourceId}:${e.lineNo}`}
+        e={e}
+        selected={e === props.selected}
+        flash={e === props.flash}
+        onSelect={props.onSelect}
+        highlight={props.highlight}
+        timeMode={props.timeMode}
+        withDate={props.withDate}
+        cols={props.cols}
+        source={props.sources.get(e.sourceId)}
+      />,
+    );
+  }
+
+  return (
+    <div class="lv-list" ref={ref} onScroll={onScroll} tabIndex={0} role="grid">
+      <div class="lv-list-inner" style={{ height: `${total * rowH}px` }}>
+        <div class="lv-list-rows" style={{ transform: `translateY(${start * rowH}px)` }}>{rows}</div>
+      </div>
+    </div>
+  );
+}
+
+function Row(props: {
+  e: LogEntry;
+  selected: boolean;
+  flash: boolean;
+  onSelect: (e: LogEntry | null) => void;
+  highlight: RegExp | null;
+  timeMode: TimeMode;
+  withDate: boolean;
+  cols: Columns;
+  source?: SourceInfo;
+}) {
+  const { e, cols } = props;
+  const cls = `lv-row lv-l-${e.level}${props.selected ? ' lv-sel' : ''}${props.flash ? ' lv-flash' : ''}`;
+  const hasError = Boolean(e.exception || e.stackText);
+  return (
+    <div class={cls} role="row" onClick={() => props.onSelect(props.selected ? null : e)}>
+      <span class={`lv-c-time${e.tsInherited ? ' lv-dim' : ''}`} title={e.tsText}>
+        {formatTime(e.tsMs, props.timeMode, props.withDate)}
+      </span>
+      <span class="lv-c-level">{e.level !== 'OTHER' && <span class={`lv-lvl lv-lvl-${e.level}`}>{e.level}</span>}</span>
+      {cols.source && (
+        <span class="lv-c-src" title={props.source?.label}>
+          <i class="lv-dot" style={{ background: props.source?.color }} />
+          {props.source?.label}
+        </span>
+      )}
+      {cols.logger && (
+        <span class="lv-c-logger" title={e.logger}>
+          {abbreviateLogger(e.logger)}
+        </span>
+      )}
+      {cols.thread && (
+        <span class="lv-c-thread" title={e.thread}>
+          {e.thread}
+        </span>
+      )}
+      <span class="lv-c-msg">
+        {hasError && <span class="lv-badge lv-badge-exc" title="Has stack trace">EXC</span>}
+        {e.json && mayContainJson(e.message) && <span class="lv-badge" title="Message contains JSON">{'{}'}</span>}
+        <Pieces pieces={highlightPieces(listText(e.message), props.highlight, 20)} />
+      </span>
+    </div>
+  );
+}
