@@ -1,6 +1,7 @@
 import type { RefObject } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { mayContainJson } from '../core/embedded';
+import { entryToRow } from '../core/exportText';
 import { highlightPieces } from '../core/filter';
 import { formatTime, type TimeMode } from '../core/time';
 import type { LogEntry, SourceInfo } from '../core/types';
@@ -78,6 +79,46 @@ export function LogList(props: {
     return () => ro.disconnect();
   }, []);
 
+  // Grid cells copy badly (glued or one per line), so a selection over several cells or rows is
+  // copied as one tab-separated line per entry. A selection inside a single cell copies as usual.
+  const copyState = useRef(props);
+  copyState.current = props;
+  useEffect(() => {
+    const onCopy = (ev: ClipboardEvent) => {
+      const list = ref.current;
+      const sel = document.getSelection();
+      if (!list || !sel || sel.isCollapsed || !sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      if (!range.intersectsNode(list)) return;
+      const cell = (n: Node | null) => (n instanceof Element ? n : n?.parentElement)?.closest('.lv-row[data-pos] > span');
+      const anchorCell = cell(sel.anchorNode);
+      if (anchorCell && anchorCell === cell(sel.focusNode)) return;
+      // A row counts only if some of its text is selected (a triple-click ends at the next row's start).
+      const touches = (row: Element) => {
+        if (!range.intersectsNode(row)) return false;
+        const part = document.createRange();
+        part.selectNodeContents(row);
+        if (range.compareBoundaryPoints(Range.START_TO_START, part) > 0) part.setStart(range.startContainer, range.startOffset);
+        if (range.compareBoundaryPoints(Range.END_TO_END, part) < 0) part.setEnd(range.endContainer, range.endOffset);
+        return part.toString().trim() !== '';
+      };
+      const positions = [...list.querySelectorAll<HTMLElement>('.lv-row[data-pos]')]
+        .filter(touches)
+        .map((row) => Number(row.dataset.pos));
+      if (!positions.length) return;
+      const { entries, indices, cols, timeMode, withDate, sources } = copyState.current;
+      const lines: string[] = [];
+      for (let pos = Math.min(...positions); pos <= Math.max(...positions); pos++) {
+        const e = entries[indices[pos]];
+        lines.push(entryToRow(e, { timeMode, withDate, logger: cols.logger, thread: cols.thread, source: cols.source ? sources.get(e.sourceId)?.label ?? '' : undefined }));
+      }
+      ev.clipboardData?.setData('text/plain', lines.join('\n'));
+      ev.preventDefault();
+    };
+    document.addEventListener('copy', onCopy);
+    return () => document.removeEventListener('copy', onCopy);
+  }, []);
+
   props.apiRef.current = {
     scrollToPos(pos, align) {
       const el = ref.current;
@@ -120,6 +161,7 @@ export function LogList(props: {
     rows.push(
       <Row
         key={`${e.sourceId}:${e.lineNo}`}
+        pos={pos}
         e={e}
         selected={e === props.selected}
         flash={e === props.flash}
@@ -143,6 +185,7 @@ export function LogList(props: {
 }
 
 function Row(props: {
+  pos: number;
   e: LogEntry;
   selected: boolean;
   flash: boolean;
@@ -157,7 +200,16 @@ function Row(props: {
   const cls = `lv-row lv-l-${e.level}${props.selected ? ' lv-sel' : ''}${props.flash ? ' lv-flash' : ''}`;
   const hasError = Boolean(e.exception || e.stackText);
   return (
-    <div class={cls} role="row" onClick={() => props.onSelect(props.selected ? null : e)}>
+    <div
+      class={cls}
+      role="row"
+      data-pos={props.pos}
+      onClick={() => {
+        // Selecting text inside a row should not open or close the details panel.
+        if (!document.getSelection()?.isCollapsed) return;
+        props.onSelect(props.selected ? null : e);
+      }}
+    >
       <span class={`lv-c-time${e.tsInherited ? ' lv-dim' : ''}`} title={e.tsText}>
         {formatTime(e.tsMs, props.timeMode, props.withDate)}
       </span>

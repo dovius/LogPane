@@ -1,5 +1,5 @@
 import { formatException } from './stacktrace';
-import { formatFull, type TimeMode } from './time';
+import { formatFull, formatTime, type TimeMode } from './time';
 import type { LogEntry } from './types';
 
 export function stackTraceOf(e: LogEntry): string {
@@ -21,6 +21,28 @@ export function entryToText(e: LogEntry, mode: TimeMode, sourceLabel?: string): 
   ].filter(Boolean).join(' ');
   const stack = stackTraceOf(e);
   return stack ? `${head}\n${stack}` : head;
+}
+
+export interface RowColumns {
+  timeMode: TimeMode;
+  withDate: boolean;
+  /** Source label when the source column is shown. */
+  source?: string;
+  logger: boolean;
+  thread: boolean;
+}
+
+/**
+ * The list row as tab-separated text: the visible columns in their order, but with full values
+ * (whole logger name, untruncated message, no badges). Used when rows are selected and copied.
+ */
+export function entryToRow(e: LogEntry, cols: RowColumns): string {
+  const parts = [formatTime(e.tsMs, cols.timeMode, cols.withDate), e.level === 'OTHER' ? '' : e.level];
+  if (cols.source !== undefined) parts.push(cols.source);
+  if (cols.logger) parts.push(e.logger);
+  if (cols.thread) parts.push(e.thread);
+  parts.push(e.message);
+  return parts.join('\t');
 }
 
 export function entriesToText(entries: readonly LogEntry[], mode: TimeMode, labels?: ReadonlyMap<number, string>): string {
