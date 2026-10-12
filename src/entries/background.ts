@@ -18,6 +18,8 @@ async function injectViewer(tabId: number): Promise<void> {
 chrome.action.onClicked.addListener(async (tab) => {
   if (tab.id === undefined) return openViewerTab();
   const target = { tabId: tab.id };
+  void chrome.action.setBadgeText({ tabId: tab.id, text: '' });
+  void chrome.action.setTitle({ tabId: tab.id, title: 'Open in LogPane' });
   try {
     const [probe] = await chrome.scripting.executeScript({
       target,
@@ -65,13 +67,16 @@ chrome.tabs.onUpdated.addListener(async (tabId, info) => {
       .catch(() => undefined);
     return;
   }
-  // Chrome keeps activeTab across same-origin reloads. If injecting still fails, show the raw text again;
-  // the saved view stays and is restored when the toolbar button is clicked on this page.
-  await injectViewer(tabId).catch(() =>
-    chrome.scripting
+  // Chrome keeps activeTab across same-origin reloads. If injecting still fails, show the raw text again and
+  // badge the toolbar button: one click reopens the viewer with the saved view.
+  await injectViewer(tabId).catch(async () => {
+    await chrome.scripting
       .executeScript({ target: { tabId }, func: () => document.documentElement.classList.remove('lv-pending') })
-      .catch(() => undefined),
-  );
+      .catch(() => undefined);
+    await chrome.action.setBadgeText({ tabId, text: '↻' });
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: '#d32f1e' });
+    await chrome.action.setTitle({ tabId, title: 'Click to reopen LogPane on this page' });
+  });
 });
 chrome.tabs.onRemoved.addListener((tabId) => void chrome.storage.session.remove(pendingKey(tabId)));
 

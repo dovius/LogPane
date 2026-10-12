@@ -20,6 +20,7 @@ export interface DevServer {
 export function serve(options: {
   logs: Record<string, string>;
   navigationOnly?: boolean;
+  rejectFetch?: 'network' | 'login-page';
   growEveryMs?: number;
   routes?: Record<string, { status?: number; headers?: Record<string, string>; body?: string }>;
 }): Promise<DevServer> {
@@ -63,23 +64,37 @@ export interface Harness {
   openManual(url: string, opts?: { dark?: boolean }): Promise<Page>;
   inject(page: Page): Promise<void>;
   setAutoOrigins(origins: string[]): Promise<void>;
+  /** Turns on "Allow access to file URLs" for the extension (Chrome reloads it). */
+  enableFileAccess(): Promise<void>;
   storage(): Promise<Record<string, unknown>>;
   close(): Promise<void>;
 }
 
-export async function launch(): Promise<Harness> {
+export interface LaunchOptions {
+  /**
+   * Host access of the test copy. Default: localhost and local files, so tests can inject the viewer
+   * like the toolbar button does. `[]` keeps only activeTab, like the real extension. Then the toolbar
+   * button is pressed through its keyboard shortcut (see pressToolbarButton), which needs a headed browser.
+   */
+  hostPermissions?: string[];
+  headless?: boolean;
+}
+
+/** Keyboard shortcut of the toolbar button in the test copy (grants activeTab like a click). */
+export const ACTION_SHORTCUT = 'Control+Shift+Y';
+
+export async function launch(options: LaunchOptions = {}): Promise<Harness> {
   if (!existsSync(join(DIST, 'manifest.json'))) throw new Error('dist/ is missing: run `npm run build` first');
-  // Test copy of the extension with localhost host access: automation can't click the toolbar button
-  // (activeTab) or answer Chrome's permission prompt.
   const ext = mkdtempSync(join(tmpdir(), 'logpane-ext-'));
   cpSync(DIST, ext, { recursive: true });
   const manifest = JSON.parse(readFileSync(join(ext, 'manifest.json'), 'utf8'));
-  manifest.host_permissions = ['http://localhost/*'];
+  manifest.host_permissions = options.hostPermissions ?? ['http://localhost/*', 'file:///*'];
+  manifest.commands = { _execute_action: { suggested_key: { default: 'Ctrl+Shift+Y', mac: 'Command+Shift+Y' } } };
   writeFileSync(join(ext, 'manifest.json'), JSON.stringify(manifest));
   const profile = mkdtempSync(join(tmpdir(), 'logpane-profile-'));
   const ctx = await chromium.launchPersistentContext(profile, {
     executablePath: findChrome(),
-    headless: true,
+    headless: options.headless ?? true,
     viewport: { width: 1400, height: 900 },
     locale: 'en-US',
     timezoneId: 'Europe/Vilnius',
@@ -89,20 +104,22 @@ export async function launch(): Promise<Harness> {
   sw ??= await ctx.waitForEvent('serviceworker');
   const extId = new URL(sw.url()).host;
   const errors: string[] = [];
+  const currentSw = () => sw;
 
   const newPage = async (opts: { dark?: boolean } = {}) => {
     const page = await ctx.newPage();
     if (opts.dark) await page.emulateMedia({ colorScheme: 'dark' });
     page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
     page.on('console', (m) => {
-      if (m.type() === 'error' && !m.location().url.endsWith('favicon.ico')) errors.push(`console: ${m.text()}`);
+      const where = m.location().url;
+      if (m.type() === 'error' && !where.endsWith('favicon.ico')) errors.push(`console: ${m.text()}${where ? ` @ ${where}` : ''}`);
     });
     return page;
   };
 
   const inject = async (page: Page) => {
     await page.bringToFront();
-    await sw.evaluate(async () => {
+    await currentSw().evaluate(async () => {
       const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
       const target = { tabId: tab.id! };
       await chrome.scripting.executeScript({ target, func: () => void ((window as { __lvManual?: boolean }).__lvManual = true) });
@@ -114,7 +131,9 @@ export async function launch(): Promise<Harness> {
 
   return {
     ctx,
-    sw,
+    get sw() {
+      return currentSw();
+    },
     extId,
     errors,
     newPage,
@@ -126,9 +145,9 @@ export async function launch(): Promise<Harness> {
       return page;
     },
     async setAutoOrigins(origins) {
-      await sw.evaluate((o) => chrome.storage.local.set({ autoOrigins: o }), origins);
+      await currentSw().evaluate((o) => chrome.storage.local.set({ autoOrigins: o }), origins);
       // the background re-registers the content script on storage change
-      await sw.evaluate(async (count) => {
+      await currentSw().evaluate(async (count) => {
         for (let i = 0; i < 50; i++) {
           const scripts = await chrome.scripting.getRegisteredContentScripts();
           if ((count === 0 && scripts.length === 0) || (count > 0 && scripts.length === 1)) return;
@@ -136,7 +155,19 @@ export async function launch(): Promise<Harness> {
         }
       }, origins.length);
     },
-    storage: () => sw.evaluate(() => chrome.storage.local.get(null)),
+    storage: () => currentSw().evaluate(() => chrome.storage.local.get(null)),
+    async enableFileAccess() {
+      const page = await ctx.newPage();
+      await page.goto(`chrome://extensions/?id=${extId}`);
+      const toggle = page.locator('#allow-on-file-urls #crToggle');
+      await toggle.waitFor();
+      if ((await toggle.getAttribute('aria-pressed')) !== 'true') {
+        const reloaded = ctx.waitForEvent('serviceworker', { timeout: 15000 });
+        await toggle.click();
+        sw = await reloaded; // Chrome restarts the extension with file access
+      }
+      await page.close();
+    },
     async close() {
       await ctx.close();
       rmSync(profile, { recursive: true, force: true });

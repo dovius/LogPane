@@ -88,7 +88,7 @@ export function Header(props: {
               class={`lv-select${props.tailSeconds ? ' lv-on' : ''}`}
               title={
                 props.tailByReload
-                  ? `This console only accepts page loads, so Tail reloads the page (at least every ${RELOAD_TAIL_MIN_SECONDS} s, paused while the tab is hidden)`
+                  ? `This page can only be re-read by reloading it, so Tail reloads the page (at least every ${RELOAD_TAIL_MIN_SECONDS} s, paused while the tab is hidden)`
                   : 'Poll for new lines (paused while the tab is hidden)'
               }
             >

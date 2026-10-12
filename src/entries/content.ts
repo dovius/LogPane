@@ -59,6 +59,8 @@ async function mount(text: string, manual: boolean): Promise<void> {
   document.body.append(root, reopen);
 
   const label = labelForUrl(location.href);
+  // A local file (file://) can't be fetched from the page: re-read it by reloading the tab.
+  const web = location.protocol === 'https:' || location.protocol === 'http:';
   document.title = `${label} – LogPane`;
 
   const store = new LogStore();
@@ -67,7 +69,8 @@ async function mount(text: string, manual: boolean): Promise<void> {
     store,
     mode: 'page',
     initialSettings,
-    canFetchUrls: true,
+    canFetchUrls: web,
+    pageReloadOnly: !web,
     baseUrl: location.href,
     onShowRaw: toggleRaw,
     onAutoOpen: openAutoSetup,

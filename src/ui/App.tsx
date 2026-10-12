@@ -37,6 +37,8 @@ export interface AppProps {
   initialView?: ViewState;
   /** Reload the page itself (like F5), for consoles that reject the viewer's own requests. */
   reloadPage?: (state: ViewState) => void;
+  /** The page can only be re-read by reloading it (local file:// pages). */
+  pageReloadOnly?: boolean;
 }
 
 function useStoreVersion(store: LogStore): number {
@@ -88,7 +90,7 @@ export function App(props: AppProps) {
   const [dragging, setDragging] = useState(false);
   const [tailSeconds, setTailSeconds] = useState(props.initialView?.tailSeconds ?? 0);
   /** The console rejected a tail request, so Tail reloads the page instead. */
-  const [tailByReload, setTailByReload] = useState(props.initialView?.tailByReload ?? false);
+  const [tailByReload, setTailByReload] = useState(props.initialView?.tailByReload ?? Boolean(props.pageReloadOnly && props.reloadPage));
   const restoreView = useRef(props.initialView);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -205,11 +207,11 @@ export function App(props: AppProps) {
         if (isRejected(store.pageSource) && reloadPage) {
           if (store.sources.length > 1) {
             setTailSeconds(0);
-            showToast('This console rejects LogPane requests: Tail works here with a single log only');
+            showToast('This page can only be re-read by reloading it: Tail works here with a single log only');
           } else {
             store.clearError(store.pageSource!);
             setTailByReload(true);
-            showToast(`This console rejects LogPane requests, so Tail reloads the page every ${Math.max(RELOAD_TAIL_MIN_SECONDS, tailSeconds)} s`);
+            showToast(`This page can only be re-read by reloading it, so Tail reloads it every ${Math.max(RELOAD_TAIL_MIN_SECONDS, tailSeconds)} s`);
           }
         }
       } finally {
@@ -325,15 +327,21 @@ export function App(props: AppProps) {
     if (selected?.sourceId === id) setSelected(null);
   };
 
+  const reloadByPage = () => {
+    if (store.sources.length > 1 && !window.confirm(otherSourcesWarning)) return;
+    showToast('Reloading the page…');
+    props.reloadPage!(viewState());
+  };
+
   const reload = async () => {
+    if (props.pageReloadOnly && props.reloadPage) return reloadByPage();
     setBusy(true);
     try {
       await store.reload();
       // The console accepts only real navigations: reload the tab like F5, keeping the view.
       if (isRejected(store.pageSource) && props.reloadPage) {
-        if (store.sources.length > 1 && !window.confirm(otherSourcesWarning)) return;
-        showToast('Reloading the page…');
-        props.reloadPage(viewState());
+        store.clearError(store.pageSource!);
+        reloadByPage();
         return;
       }
       const failed = store.sources.find((s) => s.status === 'error');

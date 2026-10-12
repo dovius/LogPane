@@ -40,10 +40,12 @@ function splitLines(text) {
  * @param {number} [options.port]                 0 picks a free port
  * @param {number} [options.growEveryMs]          append a generated line to every log on this interval
  * @param {boolean} [options.navigationOnly]      401 for everything except real page loads
+ * @param {'network' | 'login-page'} [options.rejectFetch]  how requests other than page loads fail:
+ *        'network' drops the connection (like a CORS / network error), 'login-page' answers with an HTML login page
  * @param {Record<string, {status?: number, headers?: Record<string, string>, body?: string}>} [options.routes]
  *        extra fixed responses by pathname (error pages, HTML instead of a log, …)
  */
-export function startDevServer({ logs: input, port = 0, growEveryMs = 0, navigationOnly = false, routes = {} }) {
+export function startDevServer({ logs: input, port = 0, growEveryMs = 0, navigationOnly = false, rejectFetch, routes = {} }) {
   /** pod name → { lines, times } where times[i] approximates the kubelet write time of lines[i]. */
   const logs = new Map();
   const append = (pod, newLines) => {
@@ -79,9 +81,19 @@ export function startDevServer({ logs: input, port = 0, growEveryMs = 0, navigat
       return;
     }
     const m = LOG_RE.exec(url.pathname);
-    if (m && navigationOnly && req.headers['sec-fetch-mode'] !== 'navigate') {
+    const navigation = req.headers['sec-fetch-mode'] === 'navigate';
+    if (m && navigationOnly && !navigation) {
       res.writeHead(401, { 'content-length': '0' });
       res.end();
+      return;
+    }
+    if (m && rejectFetch === 'network' && !navigation) {
+      req.socket.destroy();
+      return;
+    }
+    if (m && rejectFetch === 'login-page' && !navigation) {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end('<!doctype html><title>Log in</title><form>Log in to continue</form>');
       return;
     }
     if (m && logs.has(decodeURIComponent(m[2]))) {

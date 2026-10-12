@@ -84,3 +84,17 @@ describe('regex search safety', () => {
     expect(applyFilter(long, f({ text: 'needle' })).indices).toEqual([0]); // plain search sees everything
   });
 });
+
+describe('when Reload / Tail fall back to reloading the page', () => {
+  it('any failure to re-read the page except a real HTTP answer (404 / 5xx)', async () => {
+    const { isRejected } = await import('../src/ui/store');
+    const src = (errorStatus?: number, status: 'error' | 'ready' = 'error') => ({ status, errorStatus }) as Parameters<typeof isRejected>[0];
+    expect(isRejected(src(undefined))).toBe(true); // network / CORS (file://), login page instead of the log
+    expect(isRejected(src(401))).toBe(true);
+    expect(isRejected(src(403))).toBe(true);
+    expect(isRejected(src(404))).toBe(false);
+    expect(isRejected(src(500))).toBe(false);
+    expect(isRejected(src(undefined, 'ready'))).toBe(false);
+    expect(isRejected(undefined)).toBe(false);
+  });
+});

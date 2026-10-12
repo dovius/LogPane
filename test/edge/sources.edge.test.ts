@@ -118,7 +118,7 @@ describe('labelForUrl / labelForFileName', () => {
     ['https://h.example.com/', 'h.example.com'],
     ['https://h.example.com:8080', 'h.example.com:8080'],
     ['https://h.example.com/?file=x.log', 'h.example.com'],
-    ['file:///Users/me/app.log', 'app.log'],
+    ['file:///Users/me/app.log', 'app'], // file pages are named like opened files
     ['not a url', 'not a url'],
   ])('%s -> %s', (url, label) => {
     expect(labelForUrl(url)).toBe(label);

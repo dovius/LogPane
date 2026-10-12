@@ -66,6 +66,7 @@ export function labelForUrl(url: string): string {
   const u = tryUrl(url);
   if (!u) return url;
   const last = u.pathname.split('/').filter(Boolean).pop();
+  if (u.protocol === 'file:' && last) return labelForFileName(safeDecode(last));
   return last ? safeDecode(last) : u.host;
 }
 

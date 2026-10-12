@@ -29,8 +29,14 @@ export class HttpError extends Error {
   }
 }
 
-/** Some consoles (OpenShift among them) answer page requests with 401/403 and accept only real navigations. */
-export const isRejected = (s: SourceState | undefined) => s?.errorStatus === 401 || s?.errorStatus === 403;
+/**
+ * The page could not be fetched again, but a real page load would work:
+ * - 401/403: consoles that accept only navigations (OpenShift);
+ * - no HTTP status at all: network/CORS failure (file://, sandboxed responses) or a login page instead of the log.
+ * 404 / 5xx are real answers and stay visible as errors.
+ */
+export const isRejected = (s: SourceState | undefined) =>
+  s?.status === 'error' && (s.errorStatus === undefined || s.errorStatus === 401 || s.errorStatus === 403);
 
 export async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, { credentials: 'include', cache: 'no-store' });
