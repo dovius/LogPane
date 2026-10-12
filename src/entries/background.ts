@@ -52,13 +52,26 @@ interface PendingReload {
 const pendingKey = (tabId: number) => `reload:${tabId}`;
 
 chrome.tabs.onUpdated.addListener(async (tabId, info) => {
-  if (info.status !== 'complete') return;
+  if (info.status !== 'loading' && info.status !== 'complete') return;
   const key = pendingKey(tabId);
   const pending = (await chrome.storage.session.get(key))[key] as PendingReload | undefined;
   if (!pending?.reopen) return;
-  // Chrome keeps activeTab across same-origin reloads. If injecting still fails, the saved view stays
-  // and is restored when the toolbar button is clicked on this page again.
-  await injectViewer(tabId).catch(() => undefined);
+  if (info.status === 'loading') {
+    // Hide the raw text as early as possible: laying out a big log is what makes the reload slow.
+    const target = { tabId };
+    await chrome.scripting.insertCSS({ target, files: ['viewer.css'] }).catch(() => undefined);
+    await chrome.scripting
+      .executeScript({ target, injectImmediately: true, func: () => document.documentElement.classList.add('lv-pending') })
+      .catch(() => undefined);
+    return;
+  }
+  // Chrome keeps activeTab across same-origin reloads. If injecting still fails, show the raw text again;
+  // the saved view stays and is restored when the toolbar button is clicked on this page.
+  await injectViewer(tabId).catch(() =>
+    chrome.scripting
+      .executeScript({ target: { tabId }, func: () => document.documentElement.classList.remove('lv-pending') })
+      .catch(() => undefined),
+  );
 });
 chrome.tabs.onRemoved.addListener((tabId) => void chrome.storage.session.remove(pendingKey(tabId)));
 

@@ -72,7 +72,9 @@ html.lv-active body {
   overflow: hidden !important;
 }
 html.lv-active body > pre {
-  display: none !important;
+  /* Skip rendering the raw text but keep its layout: hiding an already laid-out big log with
+     display:none makes Chrome tear the layout down (slow), and "Raw" would rebuild it. */
+  content-visibility: hidden !important;
 }
 html:not(.lv-active) #lv-root {
   display: none !important;
@@ -87,7 +89,7 @@ html:not(.lv-active) #lv-root {
 }
 /* Automatic mode, while the raw text is still loading: hide it and say what is happening. */
 html.lv-pending body > pre {
-  visibility: hidden !important;
+  display: none !important; /* not just hidden: Chrome then skips laying out megabytes of text */
 }
 html.lv-pending::after {
   content: 'Opening in LogPane…';

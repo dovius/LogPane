@@ -54,8 +54,9 @@ async function mount(text: string, manual: boolean): Promise<void> {
   reopen.type = 'button';
   reopen.textContent = 'Open in LogPane';
   reopen.addEventListener('click', toggleRaw);
-  document.body.append(root, reopen);
+  // Hide the raw text first, so adding the viewer doesn't make Chrome lay out megabytes of text again.
   document.documentElement.classList.add('lv-active');
+  document.body.append(root, reopen);
 
   const label = labelForUrl(location.href);
   document.title = `${label} – LogPane`;
