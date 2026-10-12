@@ -5,6 +5,7 @@ import { labelForUrl } from '../core/sources';
 import { mountApp, type AutoPrompt } from '../ui/App';
 import { loadSettings } from '../ui/settings';
 import { LogStore } from '../ui/store';
+import type { ViewState } from '../ui/viewState';
 import { dismissOrigin, getAutoOrigins, getDismissedOrigins, isRawLogPath } from './autoOrigins';
 
 declare global {
@@ -35,6 +36,15 @@ async function autoPrompt(): Promise<AutoPrompt | undefined> {
   return { host: location.host, onEnable: openAutoSetup, onDismiss: () => void dismissOrigin(location.origin) };
 }
 
+/** View state saved before this page was reloaded by the viewer itself, if any. */
+async function takeViewState(): Promise<ViewState | undefined> {
+  try {
+    return ((await chrome.runtime.sendMessage({ type: 'lv-take-view' })) as ViewState | null) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function mount(text: string, manual: boolean): Promise<void> {
   window.__lvMounted = true;
   const root = document.createElement('div');
@@ -51,7 +61,7 @@ async function mount(text: string, manual: boolean): Promise<void> {
   document.title = `${label} – LogPane`;
 
   const store = new LogStore();
-  const [initialSettings, prompt] = await Promise.all([loadSettings(), manual ? autoPrompt() : undefined]);
+  const [initialSettings, prompt, initialView] = await Promise.all([loadSettings(), manual ? autoPrompt() : undefined, takeViewState()]);
   mountApp(root, {
     store,
     mode: 'page',
@@ -61,6 +71,9 @@ async function mount(text: string, manual: boolean): Promise<void> {
     onShowRaw: toggleRaw,
     onAutoOpen: openAutoSetup,
     autoPrompt: prompt,
+    initialView,
+    // Reload the tab like F5 (the background keeps the view state and re-opens a manually opened viewer).
+    reloadPage: (state) => void chrome.runtime.sendMessage({ type: 'lv-reload-tab', state, reopen: manual }),
   });
   void store.addText({ label, kind: 'page', url: location.href }, text);
 

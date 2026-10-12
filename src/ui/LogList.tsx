@@ -19,6 +19,8 @@ export interface ListApi {
   scrollToEdge(edge: 'top' | 'bottom'): void;
   /** First and last fully visible positions. */
   visibleRange(): [number, number];
+  scrollState(): { top: number; atBottom: boolean };
+  setScrollTop(top: number): void;
 }
 
 const OVERSCAN = 12;
@@ -131,6 +133,13 @@ export function LogList(props: {
     scrollToEdge(edge) {
       const el = ref.current;
       if (el) el.scrollTop = edge === 'top' ? 0 : el.scrollHeight;
+    },
+    scrollState() {
+      return { top: ref.current?.scrollTop ?? 0, atBottom: atBottom.current };
+    },
+    setScrollTop(top) {
+      const el = ref.current;
+      if (el) el.scrollTop = top;
     },
     visibleRange() {
       const el = ref.current;

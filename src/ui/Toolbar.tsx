@@ -5,6 +5,7 @@ import { formatFull, parseUserTime, type TimeMode } from '../core/time';
 import { LEVELS, type Level, type LevelCounts } from '../core/types';
 import type { Settings } from './settings';
 import type { SourceState } from './store';
+import { RELOAD_TAIL_MIN_SECONDS } from './viewState';
 import { Popover } from './widgets';
 
 const TAIL_OPTIONS = [0, 2, 5, 10, 30];
@@ -23,6 +24,8 @@ export function Header(props: {
   busy: boolean;
   onReload: () => void;
   tailSeconds: number;
+  /** Tail reloads the page (the console rejects the viewer's own requests). */
+  tailByReload: boolean;
   onTail: (seconds: number) => void;
   settings: Settings;
   onSettings: (patch: Partial<Settings>) => void;
@@ -81,8 +84,15 @@ export function Header(props: {
             <button type="button" class="lv-btn" disabled={props.busy} onClick={props.onReload} title="Fetch the log again (filters are kept)">
               ⟳ Reload
             </button>
-            <label class={`lv-select${props.tailSeconds ? ' lv-on' : ''}`} title="Poll for new lines (paused while the tab is hidden)">
-              Tail
+            <label
+              class={`lv-select${props.tailSeconds ? ' lv-on' : ''}`}
+              title={
+                props.tailByReload
+                  ? `This console only accepts page loads, so Tail reloads the page (at least every ${RELOAD_TAIL_MIN_SECONDS} s, paused while the tab is hidden)`
+                  : 'Poll for new lines (paused while the tab is hidden)'
+              }
+            >
+              {props.tailByReload ? 'Tail ↻' : 'Tail'}
               <select value={props.tailSeconds} onChange={(e) => props.onTail(Number((e.currentTarget as HTMLSelectElement).value))}>
                 {TAIL_OPTIONS.map((sec) => (
                   <option value={sec}>{sec ? `${sec}s` : 'off'}</option>

@@ -11,7 +11,8 @@ import { DetailsPanel, type CopyWhat } from './DetailsPanel';
 import { pluralize } from './format';
 import { ColumnHeader, LogList, gridTemplate, type ListApi } from './LogList';
 import { saveSettings, type Settings } from './settings';
-import type { LogStore } from './store';
+import { isRejected, type LogStore } from './store';
+import { RELOAD_TAIL_MIN_SECONDS, type ViewState } from './viewState';
 import { FilterBar, Header } from './Toolbar';
 
 /** Suggestion shown after a manual open on a Raw log page: open these automatically from now on. */
@@ -32,6 +33,10 @@ export interface AppProps {
   onShowRaw?: () => void;
   onAutoOpen?: () => void;
   autoPrompt?: AutoPrompt;
+  /** Restored after the page was reloaded by Reload / Tail. */
+  initialView?: ViewState;
+  /** Reload the page itself (like F5), for consoles that reject the viewer's own requests. */
+  reloadPage?: (state: ViewState) => void;
 }
 
 function useStoreVersion(store: LogStore): number {
@@ -69,8 +74,8 @@ export function App(props: AppProps) {
     });
   const [detailsWidth, setDetailsWidth] = useState(settings.detailsWidth);
 
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<FilterState>(EMPTY_FILTER);
+  const [query, setQuery] = useState(props.initialView?.query ?? '');
+  const [filter, setFilter] = useState<FilterState>(props.initialView?.filter ?? EMPTY_FILTER);
   const patchFilter = (patch: Partial<FilterState>) => setFilter((f) => ({ ...f, ...patch }));
   useEffect(() => {
     const t = setTimeout(() => setFilter((f) => (f.text === query ? f : { ...f, text: query })), 150);
@@ -81,7 +86,10 @@ export function App(props: AppProps) {
   const [flash, setFlash] = useState<LogEntry | null>(null);
   const [adding, setAdding] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [tailSeconds, setTailSeconds] = useState(0);
+  const [tailSeconds, setTailSeconds] = useState(props.initialView?.tailSeconds ?? 0);
+  /** The console rejected a tail request, so Tail reloads the page instead. */
+  const [tailByReload, setTailByReload] = useState(props.initialView?.tailByReload ?? false);
+  const restoreView = useRef(props.initialView);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [promptOpen, setPromptOpen] = useState(Boolean(props.autoPrompt));
@@ -137,6 +145,36 @@ export function App(props: AppProps) {
     }
   }, [entries]);
 
+  // After the page was reloaded by Reload / Tail: bring back the selection and scroll position.
+  useEffect(() => {
+    const view = restoreView.current;
+    if (!view || !entries.length || store.loading) return;
+    restoreView.current = undefined;
+    const pageId = store.pageSource?.info.id;
+    if (view.selectedLine !== undefined) {
+      const e = entries.find((x) => x.sourceId === pageId && x.lineNo === view.selectedLine);
+      if (e) setSelected(e);
+    }
+    if (!view.atBottom) requestAnimationFrame(() => listApi.current?.setScrollTop(view.scrollTop));
+  }, [entries]);
+
+  const viewState = (): ViewState => {
+    const pageId = store.pageSource?.info.id;
+    const scroll = listApi.current?.scrollState() ?? { top: 0, atBottom: true };
+    return {
+      query,
+      filter: { ...filter, text: query, hiddenSources: [] },
+      selectedLine: selected && selected.sourceId === pageId ? selected.lineNo : undefined,
+      scrollTop: scroll.top,
+      atBottom: scroll.atBottom,
+      tailSeconds,
+      tailByReload,
+    };
+  };
+  const viewStateRef = useRef(viewState);
+  viewStateRef.current = viewState;
+  const otherSourcesWarning = 'Reloading the page removes the other logs you added. Continue?';
+
   useEffect(() => {
     if (!flash) return;
     const t = setTimeout(() => setFlash(null), 1600);
@@ -145,18 +183,41 @@ export function App(props: AppProps) {
 
   useEffect(() => {
     if (!tailSeconds) return;
+    const reloadPage = props.reloadPage;
+    if (tailByReload) {
+      if (!reloadPage) return;
+      // Reload once the interval has passed and the tab is visible.
+      const due = Date.now() + Math.max(RELOAD_TAIL_MIN_SECONDS, tailSeconds) * 1000;
+      const id = setInterval(() => {
+        if (Date.now() >= due && !document.hidden && !store.loading) {
+          clearInterval(id);
+          reloadPage(viewStateRef.current());
+        }
+      }, 500);
+      return () => clearInterval(id);
+    }
     let running = false;
     const id = setInterval(async () => {
       if (running || document.hidden) return;
       running = true;
       try {
         await store.tail();
+        if (isRejected(store.pageSource) && reloadPage) {
+          if (store.sources.length > 1) {
+            setTailSeconds(0);
+            showToast('This console rejects LogPane requests: Tail works here with a single log only');
+          } else {
+            store.clearError(store.pageSource!);
+            setTailByReload(true);
+            showToast(`This console rejects LogPane requests, so Tail reloads the page every ${Math.max(RELOAD_TAIL_MIN_SECONDS, tailSeconds)} s`);
+          }
+        }
       } finally {
         running = false;
       }
     }, tailSeconds * 1000);
     return () => clearInterval(id);
-  }, [tailSeconds, store]);
+  }, [tailSeconds, tailByReload, store]);
 
   const selectPos = (pos: number, align: 'nearest' | 'center' = 'nearest') => {
     if (pos < 0 || pos >= indices.length) return;
@@ -263,6 +324,13 @@ export function App(props: AppProps) {
     setBusy(true);
     try {
       await store.reload();
+      // The console accepts only real navigations: reload the tab like F5, keeping the view.
+      if (isRejected(store.pageSource) && props.reloadPage) {
+        if (store.sources.length > 1 && !window.confirm(otherSourcesWarning)) return;
+        showToast('Reloading the page…');
+        props.reloadPage(viewState());
+        return;
+      }
       const failed = store.sources.find((s) => s.status === 'error');
       showToast(failed ? `Reload failed: ${failed.error}` : 'Reloaded');
     } finally {
@@ -400,6 +468,7 @@ export function App(props: AppProps) {
             busy={busy || Boolean(loadingSource)}
             onReload={() => void reload()}
             tailSeconds={tailSeconds}
+            tailByReload={tailByReload}
             onTail={setTailSeconds}
             settings={settings}
             onSettings={updateSettings}

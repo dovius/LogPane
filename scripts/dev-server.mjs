@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Local stand-in for the OpenShift console "Raw" log endpoint, for trying the extension without a cluster.
 //
-//   node scripts/dev-server.mjs <file.log> [more.log ...] [--port 8080] [--grow]
+//   node scripts/dev-server.mjs <file.log> [more.log ...] [--port 8080] [--grow] [--navigation-only]
 //
 // Each file is served (on 127.0.0.1 only) as text/plain at
 //   http://127.0.0.1:<port>/api/kubernetes/api/v1/namespaces/demo/pods/<file-name>/log?container=app
 // `sinceTime` is honoured like the Kubernetes API (by each line's timestamp). With --grow a new line is
-// appended to every log every 2 seconds, to try Tail.
+// appended to every log every 2 seconds, to try Tail. --navigation-only answers everything except real
+// page loads (Sec-Fetch-Mode: navigate) with 401, like OpenShift consoles that reject the viewer's fetch().
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { basename } from 'node:path';
@@ -14,6 +15,7 @@ import { basename } from 'node:path';
 const args = process.argv.slice(2);
 const port = Number(args[args.indexOf('--port') + 1]) || 8080;
 const grow = args.includes('--grow');
+const navigationOnly = args.includes('--navigation-only');
 const files = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--port');
 if (!files.length) {
   console.error('usage: node scripts/dev-server.mjs <file.log> [...] [--port 8080] [--grow]');
@@ -64,6 +66,11 @@ const LOG_RE = /^\/api\/kubernetes\/api\/v1\/namespaces\/([^/]+)\/pods\/([^/]+)\
 createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${port}`);
   const m = LOG_RE.exec(url.pathname);
+  if (m && navigationOnly && req.headers['sec-fetch-mode'] !== 'navigate') {
+    res.writeHead(401, { 'content-length': '0' });
+    res.end();
+    return;
+  }
   if (m && logs.has(decodeURIComponent(m[2]))) {
     const { lines, times } = logs.get(decodeURIComponent(m[2]));
     const since = url.searchParams.get('sinceTime');
@@ -88,6 +95,6 @@ createServer((req, res) => {
   res.end('not found');
 }).listen(port, '127.0.0.1', () => {
   // Loopback only: the served logs are not reachable from other machines.
-  console.log(`Raw log dev server on http://127.0.0.1:${port}/${grow ? ' (growing)' : ''}`);
+  console.log(`Raw log dev server on http://127.0.0.1:${port}/${grow ? ' (growing)' : ''}${navigationOnly ? ' (navigation only)' : ''}`);
   for (const pod of logs.keys()) console.log(`  http://127.0.0.1:${port}/api/kubernetes/api/v1/namespaces/demo/pods/${encodeURIComponent(pod)}/log?container=app`);
 });

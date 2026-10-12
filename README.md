@@ -28,6 +28,7 @@ Details: [PRIVACY.md](PRIVACY.md).
 - **Stack traces**: structured exceptions (Quarkus `frames` / `causedBy` / `suppressed`) are shown as normal Java stack traces you can paste into the IDE. Framework frames are dimmed.
 - **Several logs at once**: add files or Raw URLs, merged by timestamp, so you can follow one trace across services.
 - **Reload and live tail** for Kubernetes / OpenShift pod logs (uses `sinceTime`, pauses in background tabs).
+  Some consoles answer the viewer's own requests with 401 and accept only real page loads. There, Reload reloads the tab like F5, and Tail reloads it every ≥ 10 s (shown as **Tail ↻**). Search, filters, selection and scroll position are kept across reloads.
 - **Copy / export**: an entry, its JSON, its stack trace, ±N lines of context, or everything currently shown.
 - **Display options**: dark and light themes (follow the system), UTC or local time, adjustable font size.
 - **Keyboard**:

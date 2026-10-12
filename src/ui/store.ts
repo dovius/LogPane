@@ -11,6 +11,8 @@ export interface SourceState {
   tail: TailState;
   status: 'loading' | 'ready' | 'error';
   error?: string;
+  /** HTTP status of the last failed fetch, if it was an HTTP error. */
+  errorStatus?: number;
   /** Parse progress 0..1 while loading. */
   progress: number;
 }
@@ -21,9 +23,18 @@ export interface NewSource {
   url?: string;
 }
 
+export class HttpError extends Error {
+  constructor(readonly status: number, statusText: string) {
+    super(`HTTP ${status}${statusText ? ` ${statusText}` : ''}`);
+  }
+}
+
+/** Some consoles (OpenShift among them) answer page requests with 401/403 and accept only real navigations. */
+export const isRejected = (s: SourceState | undefined) => s?.errorStatus === 401 || s?.errorStatus === 403;
+
 export async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, { credentials: 'include', cache: 'no-store' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}${res.statusText ? ` ${res.statusText}` : ''}`);
+  if (!res.ok) throw new HttpError(res.status, res.statusText);
   if ((res.headers.get('content-type') ?? '').includes('text/html')) {
     throw new Error('Got an HTML page instead of a log. Is the console session still valid?');
   }
@@ -66,6 +77,11 @@ export class LogStore {
     return this.sources.some(canRefetch);
   }
 
+  /** The source for the page the viewer runs on (Raw log page), if any. */
+  get pageSource(): SourceState | undefined {
+    return this.sources.find((s) => s.info.kind === 'page');
+  }
+
   get loading(): boolean {
     return this.sources.some((s) => s.status === 'loading');
   }
@@ -98,6 +114,7 @@ export class LogStore {
     });
     s.status = 'ready';
     s.error = undefined;
+    s.errorStatus = undefined;
     this.remerge();
     this.emit();
   }
@@ -105,6 +122,7 @@ export class LogStore {
   private fail(s: SourceState, err: unknown): void {
     s.status = 'error';
     s.error = err instanceof Error ? err.message : String(err);
+    s.errorStatus = err instanceof HttpError ? err.status : undefined;
     this.emit();
   }
 
@@ -119,6 +137,15 @@ export class LogStore {
     } catch (err) {
       this.fail(s, err);
     }
+  }
+
+  /** Forget a failed fetch (the viewer handles it differently, e.g. by reloading the page). */
+  clearError(s: SourceState): void {
+    if (s.status !== 'error') return;
+    s.status = 'ready';
+    s.error = undefined;
+    s.errorStatus = undefined;
+    this.emit();
   }
 
   remove(id: number): void {
@@ -153,6 +180,7 @@ export class LogStore {
           if (s.status === 'error') {
             s.status = 'ready';
             s.error = undefined;
+            s.errorStatus = undefined;
           }
           if (!fresh.length) return;
           recordLines(s.tail, fresh);
