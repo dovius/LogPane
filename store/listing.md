@@ -23,7 +23,7 @@ LogPane turns raw JSON and NDJSON logs into a clean, searchable, and easy-to-rea
 Built for developers, DevOps engineers, and anyone working with structured application logs.
 
 FEATURES
-• Beautiful, readable JSON and NDJSON log viewer
+• Readable JSON and NDJSON log viewer
 • Filter logs by severity: ERROR, WARN, INFO, and DEBUG
 • Instantly search messages and structured fields
 • Expand and inspect individual log entries
@@ -31,7 +31,7 @@ FEATURES
 • Readable Java stack traces from structured exception fields
 • Pretty-printed JSON payloads inside log messages
 • Merge several logs by time and follow one request across services
-• Reload and live tail for Kubernetes / OpenShift pod logs
+• Reload and live tail for Kubernetes and OpenShift pod logs
 • Copy or export exactly the entries you filtered
 • Dark and light themes
 • Open local log files or inspect supported browser pages
@@ -40,18 +40,19 @@ FEATURES
 PRIVACY FIRST
 Your logs stay on your device. LogPane processes data locally in your browser, with no account, external processing servers, or tracking.
 
-WORKS WITH LOGS FROM
-Kubernetes, OpenShift, Docker, Java, Quarkus, Spring Boot, Node.js, and any other application producing compatible structured logs.
-
 No complicated setup. No subscriptions. Just readable logs.
 
 Open source. Free to use.
 
 Make sense of your logs with LogPane.
 
-—
-Kubernetes is a registered trademark of The Linux Foundation. Red Hat and OpenShift are trademarks of Red Hat, Inc. Docker is a trademark of Docker, Inc. Java is a registered trademark of Oracle and/or its affiliates. Spring Boot is a trademark of Broadcom Inc. Quarkus is a trademark of Red Hat, Inc. Node.js is a trademark of the OpenJS Foundation. Chrome is a trademark of Google LLC. Other names may be trademarks of their respective owners. LogPane is an independent open-source project and is not affiliated with, endorsed by, or sponsored by any of them.
+All product names mentioned are trademarks of their respective owners. LogPane is an independent open-source project.
 ```
+
+> **Lesson from review (rejected for "keyword spam", ref. Yellow Argon):**
+> - Don't put lists of platforms or brands in the description. "Works with logs from Kubernetes, OpenShift, Docker, Java, …" was flagged.
+> - Don't use a trademark notice that repeats brand names.
+> - Mention a platform only where a feature needs it.
 
 Supported formats, for reference:
 - Quarkus / JBoss JSON
