@@ -2,7 +2,7 @@ import { exceptionChain } from './stacktrace';
 import {
   BOILERPLATE_KEYS, FIELD_ALIASES, collectValues, detectPlainLevel, isGelf, normalizeLevel, pick, pickString, syslogLevel,
 } from './fields';
-import { leadingTimestamp, parseTimestamp } from './time';
+import { leadingTimestampMatch, parseTimestamp } from './time';
 import type { JsonObject, LogEntry } from './types';
 
 /** Keys already indexed explicitly (or useless) and therefore skipped when indexing "other" fields. */
@@ -12,11 +12,26 @@ const INDEXED_KEYS = new Set<string>([
 ]);
 
 const CONTINUATION_RE = /^(?:\s+\S|Caused by:|Suppressed:|\.\.\. \d+ (?:more|common frames omitted)|at [\w$.<>]+\()/;
+/**
+ * First line of a Java stack trace printed after a plain-text log line (logback, log4j):
+ * `java.lang.IllegalStateException: boom`. "Exception in thread …" starts a new entry instead.
+ */
+const EXCEPTION_HEADER_RE = /^(?:[a-zA-Z_$][\w$]*\.)+[A-Z][\w$]*(?:Exception|Error|Throwable)(?::|$)/;
+/** containerd / CRI-O node log line after its timestamp: `stdout F <line>`. */
+const CRI_STREAM_RE = /^(?:stdout|stderr) [FP] /;
 
 export function splitLines(text: string): string[] {
-  const lines = text.split(/\r?\n/);
+  const lines = text.split(/\r\n|\n|\r/);
   if (lines.length && lines[lines.length - 1] === '') lines.pop();
   return lines;
+}
+
+function safeStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
 }
 
 function asObject(v: unknown): JsonObject | undefined {
@@ -62,6 +77,8 @@ export class LogParser {
   lineCount = 0;
   private last: LogEntry | null = null;
   private lastTs = { ms: Number.NaN, nanos: 0, text: undefined as string | undefined };
+  /** Entries before the first timestamp of the source (banners); they get that first timestamp. */
+  private untimed: LogEntry[] | null = [];
 
   constructor(readonly sourceId: number) {}
 
@@ -71,13 +88,23 @@ export class LogParser {
     for (const line of lines) {
       const lineNo = ++this.lineCount;
       if (line.trim() === '') continue;
-      if (this.last && !this.last.json && !line.trimStart().startsWith('{') && CONTINUATION_RE.test(line)) {
+      if (this.last && !this.last.json && !line.trimStart().startsWith('{') && (CONTINUATION_RE.test(line) || EXCEPTION_HEADER_RE.test(line))) {
         this.extend(this.last, line);
         continue;
       }
       const entry = this.parseLine(line, lineNo);
       if (!Number.isNaN(entry.tsMs) && !entry.tsInherited) {
         this.lastTs = { ms: entry.tsMs, nanos: entry.tsNanos, text: entry.tsText };
+        if (this.untimed) {
+          // Without a time these would sort after every other source when merging.
+          for (const e of this.untimed) {
+            e.tsMs = entry.tsMs;
+            e.tsNanos = entry.tsNanos;
+          }
+          this.untimed = null;
+        }
+      } else if (this.untimed) {
+        this.untimed.push(entry);
       }
       this.last = entry;
       out.push(entry);
@@ -92,21 +119,23 @@ export class LogParser {
   }
 
   private parseLine(line: string, lineNo: number): LogEntry {
+    // trimStart also drops a BOM and non-breaking spaces before the JSON
     const trimmed = line.trimStart();
     if (trimmed.startsWith('{')) {
-      const obj = tryParseObject(line);
+      const obj = tryParseObject(trimmed);
       if (obj) return isDockerWrapper(obj) ? this.dockerEntry(obj, line, lineNo) : this.jsonEntry(obj, line, lineNo);
     }
-    const tsText = leadingTimestamp(trimmed);
-    if (tsText) {
-      // `kubectl logs --timestamps` style: "<rfc3339> {json}"
-      const rest = trimmed.slice(tsText.length).trimStart();
+    const ts = leadingTimestampMatch(trimmed);
+    if (ts) {
+      // `kubectl logs --timestamps` style "<rfc3339> {json}", `[<ts>] {json}`, and CRI node logs "<ts> stdout F {json}"
+      let rest = trimmed.slice(ts.end).trimStart();
+      if (CRI_STREAM_RE.test(rest)) rest = rest.slice(9);
       if (rest.startsWith('{')) {
         const obj = tryParseObject(rest);
-        if (obj) return this.jsonEntry(obj, line, lineNo, tsText);
+        if (obj) return this.jsonEntry(obj, line, lineNo, ts.text);
       }
     }
-    return this.plainEntry(line, lineNo, tsText);
+    return this.plainEntry(line, lineNo, ts?.text ?? null);
   }
 
   /** Docker json-file line: the application's own line (often JSON itself) is in `log`. */
@@ -121,8 +150,12 @@ export class LogParser {
   }
 
   private jsonEntry(obj: JsonObject, raw: string, lineNo: number, fallbackTs?: string): LogEntry {
-    const tsValue = pick(obj, FIELD_ALIASES.timestamp) ?? fallbackTs;
-    const ts = parseTimestamp(tsValue);
+    // The line's own time wins; a wrapper's time (kubectl prefix, docker) is used when it is missing or unreadable.
+    const own = pick(obj, FIELD_ALIASES.timestamp);
+    const ownTs = parseTimestamp(own);
+    const fallback = ownTs || fallbackTs === undefined ? null : parseTimestamp(fallbackTs);
+    const ts = ownTs ?? fallback;
+    const tsValue = ownTs || !fallback ? own ?? fallbackTs : fallbackTs;
     const exception = structuredException(obj.exception);
     const stack = exception ? undefined : pick(obj, FIELD_ALIASES.stackText) ?? obj.exception;
     const seq = Number(pick(obj, FIELD_ALIASES.sequence));
@@ -131,7 +164,7 @@ export class LogParser {
       lineNo,
       raw,
       json: obj,
-      tsText: typeof tsValue === 'string' ? tsValue : tsValue === undefined ? undefined : String(tsValue),
+      tsText: typeof tsValue === 'string' ? tsValue : tsValue === undefined ? undefined : typeof tsValue === 'object' ? safeStringify(tsValue) : String(tsValue),
       tsMs: ts ? ts.ms : this.lastTs.ms,
       tsNanos: ts ? ts.nanos : this.lastTs.nanos,
       tsInherited: !ts,

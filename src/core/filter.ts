@@ -33,7 +33,9 @@ export function parseQuery(text: string, caseSensitive: boolean): TextQuery {
     let term: string;
     let negate: boolean;
     if (m[3] !== undefined) {
-      negate = m[3].length > 1 && m[3].startsWith('-');
+      if (m[3] === '-') continue; // an exclusion still being typed
+      // "-term" excludes; "--flag" is searched for as written
+      negate = m[3].startsWith('-') && !m[3].startsWith('--');
       term = negate ? m[3].slice(1) : m[3];
     } else {
       negate = m[1] === '-';
@@ -48,6 +50,31 @@ export function parseQuery(text: string, caseSensitive: boolean): TextQuery {
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+/** Regex search looks at this much of each entry: a careless pattern on a huge line can take minutes. */
+export const REGEX_SUBJECT_LIMIT = 2000;
+
+/**
+ * Backtracking cost grows roughly with length^(unbounded quantifiers), so patterns with more `*` / `+`
+ * look at less of each entry.
+ */
+export function regexSubjectLimit(source: string): number {
+  const unbounded = (source.match(/[*+]|\{\d+,\}/g) ?? []).length;
+  return unbounded <= 1 ? REGEX_SUBJECT_LIMIT : unbounded === 2 ? 1000 : 300;
+}
+/** A regex filter that takes longer than this over all entries is stopped with an error. */
+export const REGEX_BUDGET_MS = 1000;
+export const REGEX_TOO_SLOW = 'This regular expression is too slow on these logs. Make it more specific (avoid patterns like .*.*).';
+
+/**
+ * `.*foo` is tried from every position of every line (quadratic); anchored at line starts it gives
+ * the same answer much faster. Only for patterns without alternation, where the anchor can't change meaning.
+ */
+function fastRegex(source: string, flags: string): RegExp {
+  // `m` makes ^ match at line starts; only safe when the pattern has no ^ / $ / | of its own
+  if (/^\.[*+]/.test(source) && !/[|^$]/.test(source)) return new RegExp(`^(?:${source})`, `${flags}m`);
+  return new RegExp(source, flags);
+}
+
 export interface CompiledFilter {
   /** Every predicate except the level one (so level chips can show "what you'd get"). */
   matchesExceptLevel: (e: LogEntry) => boolean;
@@ -55,9 +82,11 @@ export interface CompiledFilter {
   /** Global regex for highlighting matches in the UI, or null. */
   highlight: RegExp | null;
   error?: string;
+  /** Regex search: applyFilter stops after REGEX_BUDGET_MS. */
+  timed?: boolean;
 }
 
-function compileText(f: FilterState): Pick<CompiledFilter, 'highlight' | 'error'> & { test: ((e: LogEntry) => boolean) | null } {
+function compileText(f: FilterState): Pick<CompiledFilter, 'highlight' | 'error' | 'timed'> & { test: ((e: LogEntry) => boolean) | null } {
   if (!f.text.trim()) return { test: null, highlight: null };
   const text = (e: LogEntry) => (f.caseSensitive ? searchText(e) : e.haystack);
   if (f.regex) {
@@ -67,7 +96,13 @@ function compileText(f: FilterState): Pick<CompiledFilter, 'highlight' | 'error'
     } catch (err) {
       return { test: () => false, highlight: null, error: (err as Error).message };
     }
-    return { test: (e) => re.test(text(e)), highlight: new RegExp(re.source, re.flags + 'g') };
+    const fast = fastRegex(f.text, re.flags);
+    const limit = regexSubjectLimit(f.text);
+    const test = (e: LogEntry) => {
+      const t = text(e);
+      return fast.test(t.length > limit ? t.slice(0, limit) : t);
+    };
+    return { test, highlight: new RegExp(re.source, re.flags + 'g'), timed: true };
   }
   const q = parseQuery(f.text, f.caseSensitive);
   if (!q.include.length && !q.exclude.length) return { test: null, highlight: null };
@@ -102,6 +137,7 @@ export function compileFilter(f: FilterState): CompiledFilter {
     matchesLevel: levels ? (e) => levels.has(e.level) : () => true,
     highlight: textPart.highlight,
     error: textPart.error,
+    timed: textPart.timed,
   };
 }
 
@@ -118,7 +154,12 @@ export function applyFilter(entries: readonly LogEntry[], f: FilterState): Filte
   const c = compileFilter(f);
   const counts = emptyLevelCounts();
   const indices: number[] = [];
+  const deadline = c.timed ? performance.now() + REGEX_BUDGET_MS : Number.POSITIVE_INFINITY;
   for (let i = 0; i < entries.length; i++) {
+    // checked on every entry: a single slow regex test can take a long time
+    if (c.timed && performance.now() > deadline) {
+      return { indices: [], counts: emptyLevelCounts(), highlight: null, error: REGEX_TOO_SLOW };
+    }
     const e = entries[i];
     if (!c.matchesExceptLevel(e)) continue;
     counts[e.level]++;

@@ -714,6 +714,10 @@ mark.lv-hit {
   color: var(--lv-hit-fg);
   border-radius: 2px;
 }
+.lv-overlay-error {
+  border-color: var(--lv-error);
+  color: var(--lv-error);
+}
 .lv-overlay-msg {
   position: absolute;
   top: 48px;

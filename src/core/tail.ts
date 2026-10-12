@@ -27,8 +27,9 @@ export function recordLines(state: TailState, lines: readonly string[]): void {
  *
  * Two response shapes are handled:
  *  - the whole log again (server ignored `sinceTime`): recognised by its first line, the known prefix is cut off;
- *  - lines since `sinceTime`: the response starts with lines we already have; that overlap is a prefix
- *    and is skipped line by line against the recent window (multiset, so repeated lines are counted).
+ *  - lines since `sinceTime`: the response starts with lines we already have. That overlap is the
+ *    longest prefix of the response equal to the end of what we have, so new lines that repeat older
+ *    ones (the same error twice, blank lines) are kept.
  */
 export function newLines(state: TailState, incoming: readonly string[]): string[] {
   if (state.lineCount === 0) return incoming.slice();
@@ -39,13 +40,13 @@ export function newLines(state: TailState, incoming: readonly string[]): string[
   ) {
     return incoming.slice(state.lineCount);
   }
-  const counts = new Map<string, number>();
-  for (const line of state.recent) counts.set(line, (counts.get(line) ?? 0) + 1);
-  let i = 0;
-  for (; i < incoming.length; i++) {
-    const n = counts.get(incoming[i]);
-    if (!n) break;
-    counts.set(incoming[i], n - 1);
+  const recent = state.recent;
+  const last = recent[recent.length - 1];
+  for (let k = Math.min(recent.length, incoming.length); k > 0; k--) {
+    if (incoming[k - 1] !== last) continue;
+    let same = true;
+    for (let i = 0; i < k && same; i++) same = incoming[i] === recent[recent.length - k + i];
+    if (same) return incoming.slice(k);
   }
-  return incoming.slice(i);
+  return incoming.slice();
 }

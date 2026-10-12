@@ -11,6 +11,15 @@ const CONSOLE_PATH_RE = /\/k8s\/ns\/([^/]+)\/(?:pods|core~v1~Pod)\/([^/]+)(?:\/c
 
 export const SOURCE_COLORS = ['#4e79a7', '#f28e2b', '#59a14f', '#b07aa1', '#e15759', '#76b7b2', '#edc948', '#9c755f'];
 
+/** decodeURIComponent that keeps malformed escapes (`100%.log`, `caf%E9`) instead of throwing. */
+function safeDecode(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
 function tryUrl(input: string, base?: string): URL | null {
   try {
     return new URL(input.trim(), base);
@@ -25,7 +34,7 @@ export function parsePodLogUrl(url: string): PodLogRef | null {
   const m = RAW_PATH_RE.exec(u.pathname);
   if (!m) return null;
   const container = u.searchParams.get('container') ?? undefined;
-  return { namespace: decodeURIComponent(m[1]), pod: decodeURIComponent(m[2]), container };
+  return { namespace: safeDecode(m[1]), pod: safeDecode(m[2]), container };
 }
 
 /**
@@ -39,7 +48,7 @@ export function toRawLogUrl(input: string, base?: string): string | null {
   const m = CONSOLE_PATH_RE.exec(u.pathname);
   if (!m) return u.href;
   const raw = new URL(`/api/kubernetes/api/v1/namespaces/${m[1]}/pods/${m[2]}/log`, u.origin);
-  const container = m[3] ? decodeURIComponent(m[3]) : u.searchParams.get('container');
+  const container = m[3] ? safeDecode(m[3]) : u.searchParams.get('container');
   if (container) raw.searchParams.set('container', container);
   return raw.href;
 }
@@ -57,7 +66,7 @@ export function labelForUrl(url: string): string {
   const u = tryUrl(url);
   if (!u) return url;
   const last = u.pathname.split('/').filter(Boolean).pop();
-  return last ? decodeURIComponent(last) : u.host;
+  return last ? safeDecode(last) : u.host;
 }
 
 export function labelForFileName(name: string): string {
@@ -78,5 +87,8 @@ export function withSinceTime(url: string, lastMs: number): string {
   const u = new URL(url);
   const sec = Math.floor(lastMs / 1000) * 1000 - 1000;
   u.searchParams.set('sinceTime', new Date(sec).toISOString().replace(/\.\d{3}Z$/, 'Z'));
+  // Kubernetes rejects sinceSeconds together with sinceTime, and applies tailLines first (it would drop lines).
+  u.searchParams.delete('sinceSeconds');
+  u.searchParams.delete('tailLines');
   return u.href;
 }

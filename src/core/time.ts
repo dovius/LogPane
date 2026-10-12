@@ -10,20 +10,61 @@ export interface ParsedTime {
 
 const ISO_RE = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)(?:[.,](\d+))?\s*(Z|[+-]\d{2}(?::?\d{2})?)?$/i;
 
+/** Largest epoch milliseconds a JS Date can hold. */
+const MAX_DATE_MS = 8.64e15;
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/** Rejects impossible dates instead of letting Date roll them over (Feb 30, 25:00, 10:99). */
+export function validDateParts(y: number, mo: number, d: number, h: number, mi: number, s: number): boolean {
+  return mo >= 1 && mo <= 12 && d >= 1 && d <= daysInMonth(y, mo) && h >= 0 && h <= 23 && mi >= 0 && mi <= 59 && s >= 0 && s <= 60;
+}
+
+/** Splits fractional milliseconds into whole ms + nanos, carrying a rounded-up 1 000 000 ns. */
+function fromMs(ms: number): ParsedTime | null {
+  if (!Number.isFinite(ms) || Math.abs(ms) > MAX_DATE_MS) return null;
+  let whole = Math.floor(ms);
+  let nanos = Math.round((ms - whole) * 1e6);
+  if (nanos >= 1e6) {
+    whole += 1;
+    nanos -= 1e6;
+  }
+  return { ms: whole, nanos };
+}
+
 /**
  * Parses ISO-8601 timestamps with any number of fractional digits (Quarkus writes 7–9),
- * plus epoch seconds / milliseconds. Timestamps without a zone are treated as UTC,
- * which is what containers almost always run in.
+ * epoch numbers in s / ms / µs / ns, and `{seconds, nanos}` objects (Google Cloud style).
+ * Timestamps without a zone are treated as UTC, which is what containers almost always run in.
  */
 export function parseTimestamp(value: unknown): ParsedTime | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
-    const ms = value > 1e14 ? value / 1e6 : value > 1e11 ? value : value * 1000; // ns, ms or s
-    return { ms: Math.floor(ms), nanos: Math.round((ms - Math.floor(ms)) * 1e6) };
+    if (value < 0) return null; // no log is written before 1970
+    // ns > 1e17 ≥ µs > 1e14 ≥ ms > 1e11 ≥ s. µs / ns are split with integer maths: as fractional
+    // milliseconds they would lose sub-microsecond precision.
+    if (value > 1e14) {
+      const per = value > 1e17 ? 1e6 : 1e3;
+      const ms = Math.floor(value / per);
+      return ms > MAX_DATE_MS ? null : { ms, nanos: Math.min(999_999, Math.round((value - ms * per) * (1e6 / per))) };
+    }
+    return fromMs(value > 1e11 ? value : value * 1000);
+  }
+  if (value !== null && typeof value === 'object' && typeof (value as { seconds?: unknown }).seconds === 'number') {
+    const { seconds, nanos } = value as { seconds: number; nanos?: unknown };
+    const n = typeof nanos === 'number' && Number.isFinite(nanos) && nanos >= 0 ? Math.floor(nanos) : 0;
+    if (!Number.isInteger(seconds)) return fromMs(seconds * 1000 + n / 1e6);
+    const ms = seconds * 1000 + Math.floor(n / 1e6);
+    return ms < 0 || ms > MAX_DATE_MS ? null : { ms, nanos: n % 1e6 };
   }
   if (typeof value !== 'string') return null;
   const m = ISO_RE.exec(value.trim());
   if (!m) return null;
   const [, date, time, frac = '', zoneRaw] = m;
+  const [y, mo, d] = date.split('-').map(Number);
+  const [h, mi, sec = 0] = time.split(':').map(Number);
+  if (!validDateParts(y, mo, d, h, mi, sec)) return null;
   const fracMs = (frac + '000').slice(0, 3);
   const nanos = Number((frac.slice(3) + '000000').slice(0, 6));
   let zone = zoneRaw ? zoneRaw.toUpperCase() : 'Z';
@@ -36,8 +77,13 @@ const LEADING_TS_RE = /^\[?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?
 
 /** Timestamp at the very start of a plain-text line, e.g. `2026-10-01 13:55:19,169 INFO ...`. */
 export function leadingTimestamp(line: string): string | null {
+  return leadingTimestampMatch(line)?.text ?? null;
+}
+
+/** Like leadingTimestamp, plus where the prefix ends (after an optional closing bracket). */
+export function leadingTimestampMatch(line: string): { text: string; end: number } | null {
   const m = LEADING_TS_RE.exec(line);
-  return m ? m[1] : null;
+  return m ? { text: m[1], end: m[0].length } : null;
 }
 
 const pad = (n: number, w = 2) => String(n).padStart(w, '0');
@@ -96,6 +142,7 @@ export function parseUserTime(input: string, mode: TimeMode, referenceMs: number
     [y, mo, d] = [p.y, p.mo, p.d];
   }
   const [h, mi, sec, frac] = [Number(m[4]), Number(m[5]), Number(m[6] ?? 0), Number((m[7] ?? '0').padEnd(3, '0'))];
+  if (!validDateParts(y, mo, d, h, mi, sec) || sec > 59) return null;
   const ms = mode === 'utc'
     ? Date.UTC(y, mo - 1, d, h, mi, sec, frac)
     : new Date(y, mo - 1, d, h, mi, sec, frac).getTime();

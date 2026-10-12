@@ -35,6 +35,7 @@ export interface RowColumns {
 /**
  * The list row as tab-separated text: the visible columns in their order, but with full values
  * (whole logger name, untruncated message, no badges). Used when rows are selected and copied.
+ * Tabs inside values become spaces so each field stays one column.
  */
 export function entryToRow(e: LogEntry, cols: RowColumns): string {
   const parts = [formatTime(e.tsMs, cols.timeMode, cols.withDate), e.level === 'OTHER' ? '' : e.level];
@@ -42,7 +43,7 @@ export function entryToRow(e: LogEntry, cols: RowColumns): string {
   if (cols.logger) parts.push(e.logger);
   if (cols.thread) parts.push(e.thread);
   parts.push(e.message);
-  return parts.join('\t');
+  return parts.map((p) => p.replace(/\t/g, ' ')).join('\t');
 }
 
 export function entriesToText(entries: readonly LogEntry[], mode: TimeMode, labels?: ReadonlyMap<number, string>): string {

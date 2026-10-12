@@ -281,7 +281,7 @@ export function App(props: AppProps) {
     void copy(format === 'text' ? entriesToText(list, settings.timeMode, labels()) : entriesToNdjson(list), pluralize(list.length, 'entry', 'entries'));
   };
   const onDownload = () => {
-    const base = store.sources.length === 1 ? store.sources[0].info.label.replace(/[^\w.-]+/g, '_') : 'logs';
+    const base = store.sources.length === 1 ? store.sources[0].info.label.replace(/[^\w.]+/g, '-').replace(/^-+|-+$/g, '') || 'logs' : 'logs';
     downloadText(entriesToText(shownEntries(), settings.timeMode, labels()), `${base}-${isFilterActive(filter) ? 'filtered' : 'all'}.log`);
   };
 
@@ -304,12 +304,17 @@ export function App(props: AppProps) {
   };
   const addUrls = (urls: string[]) => {
     const origin = props.baseUrl ? new URL(props.baseUrl).origin : undefined;
+    const invalid: string[] = [];
+    let foreign = false;
     for (const input of urls) {
-      const url = toRawLogUrl(input, props.baseUrl);
-      if (!url) showToast(`Not a URL: ${input}`);
-      else if (origin && new URL(url).origin !== origin) showToast(`Only URLs from ${origin} can be fetched here`);
+      const url = /^(https?:\/\/|\/)/i.test(input) ? toRawLogUrl(input, props.baseUrl) : null;
+      if (!url) invalid.push(input);
+      else if (origin && new URL(url).origin !== origin) foreign = true;
       else void store.addUrl({ label: labelForUrl(url), kind: 'url', url });
     }
+    // one message for the whole input, not one toast per word
+    if (foreign) showToast(`Only URLs from ${origin} can be fetched here`);
+    else if (invalid.length) showToast(`Not a URL: ${invalid.join(' ').slice(0, 80)}`);
   };
   const pasteCount = useRef(0);
   const addPaste = (text: string) => void store.addText({ label: `pasted ${++pasteCount.current}`, kind: 'paste' }, text);
@@ -357,9 +362,15 @@ export function App(props: AppProps) {
     handle.addEventListener('pointerup', onUp);
   };
 
-  useEffect(() => {
+  // Registered once; the handlers read the latest state through a ref. Re-registering in an effect
+  // after every render would leave a stale handler between a click and the next paint.
+  const handlersRef = useRef<{ key: (e: KeyboardEvent) => void; paste: (e: ClipboardEvent) => void }>();
+  {
     const onKey = (e: KeyboardEvent) => {
-      if (adding) return;
+      if (adding) {
+        if (e.key === 'Escape') setAdding(false);
+        return;
+      }
       if (e.key === 'Escape') {
         if (isField(e.target)) {
           if (e.target === searchRef.current && query) setQuery('');
@@ -412,13 +423,18 @@ export function App(props: AppProps) {
       const text = e.clipboardData?.getData('text/plain');
       if (text?.trim()) addPaste(text);
     };
+    handlersRef.current = { key: onKey, paste: onPaste };
+  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => handlersRef.current?.key(e);
+    const onPaste = (e: ClipboardEvent) => handlersRef.current?.paste(e);
     document.addEventListener('keydown', onKey);
     document.addEventListener('paste', onPaste);
     return () => {
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('paste', onPaste);
     };
-  });
+  }, []);
 
   const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
   const loadingSource = store.sources.find((s) => s.status === 'loading');
@@ -549,8 +565,8 @@ export function App(props: AppProps) {
                 </div>
               )}
               {!loadingSource && entries.length > 0 && indices.length === 0 && (
-                <div class="lv-overlay-msg">
-                  No entries match the filters.{' '}
+                <div class={`lv-overlay-msg${result.error ? ' lv-overlay-error' : ''}`}>
+                  {result.error ? `Search: ${result.error}` : 'No entries match the filters.'}{' '}
                   <button type="button" class="lv-link" onClick={clearFilters}>
                     Clear filters
                   </button>

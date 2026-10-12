@@ -92,15 +92,37 @@ The Chrome Web Store only looks at the manifest version, which must increase wit
 
 ```sh
 npm run watch                  # rebuild on change
-npm test                       # unit tests (vitest)
+npm test                       # unit + edge-case tests (vitest)
+npm run test:e2e               # end-to-end tests in a real Chromium with the extension loaded
+npm run test:all               # typecheck + unit + end-to-end
 npm run typecheck
 npm run zip                    # → logpane-extension.zip for the Chrome Web Store
-node scripts/dev-server.mjs some.log [more.log] [--port 8080] [--grow]
+node scripts/dev-server.mjs some.log [more.log] [--port 8080] [--grow] [--navigation-only]
 ```
 
 The dev server serves files like the Kubernetes Raw log endpoint, at
 `http://localhost:8080/api/kubernetes/api/v1/namespaces/demo/pods/<file-name>/log`. It supports
-`sinceTime`, and `--grow` keeps appending lines so you can try Tail.
+`sinceTime`. `--grow` keeps appending lines so you can try Tail, and `--navigation-only` answers the
+viewer's own requests with 401, like consoles that only accept page loads.
+
+### Tests
+
+- **Unit tests** (`test/*.test.ts`, `test/edge/`): parser, fields, time, filters, merge, stack traces, sources, tail and export. Includes seeded fuzz and property tests.
+- **End-to-end tests** (`test/e2e/*.e2e.ts`): user scenarios in Chromium with the built extension.
+  - opening Raw pages
+  - every log format
+  - search, filters and keyboard
+  - details, copy and export
+  - several logs at once
+  - automatic opening and options
+  - Reload and Tail, on normal and on "navigation-only" consoles
+  - the file viewer (files, drag & drop, paste)
+  - hostile content (XSS, prototype keys, huge lines)
+  - themes and small screens
+  - a 30 MB performance budget on a 4× slower CPU
+
+  Each suite also fails on any page error. The tests need a Chromium: they use the newest one in the Playwright cache (`npx playwright-core install chromium`), or set `LOGPANE_CHROME`. Set `LOGPANE_SKIP_BUILD=1` to reuse an existing `dist/`.
+- **Mock logs** (`test/support/mocklogs.ts`): deterministic generators for realistic services, every format and edge cases. No real data.
 
 Test and demo data are fictional:
 - `node scripts/make-fixtures.mjs` regenerates the test fixtures, and `--big 50000 <out>` creates a large file.

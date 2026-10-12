@@ -19,6 +19,8 @@
     "zip": "node build.mjs --zip",
     "typecheck": "tsc --noEmit -p . && tsc --noEmit -p test",
     "test": "vitest run",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "test:all": "npm run typecheck && npm test && npm run test:e2e",
     "dev-server": "node scripts/dev-server.mjs"
   },
   "dependencies": {
@@ -28,6 +30,7 @@
     "@types/chrome": "0.3.5",
     "@types/node": "24.19.2",
     "esbuild": "0.28.2",
+    "playwright-core": "1.64.0",
     "typescript": "5.9.3",
     "vitest": "5.0.3"
   }

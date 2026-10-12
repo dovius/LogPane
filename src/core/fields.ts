@@ -52,7 +52,13 @@ export function pick(obj: JsonObject, aliases: readonly string[]): unknown {
 export function pickString(obj: JsonObject, aliases: readonly string[]): string {
   const v = pick(obj, aliases);
   if (v === undefined) return '';
-  return typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v);
+  if (typeof v === 'string') return v;
+  if (typeof v !== 'object') return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return '[value too deeply nested to show]'; // JSON.parse copes with depths JSON.stringify overflows on
+  }
 }
 
 const LEVEL_NAMES: Record<string, Level> = {
@@ -75,13 +81,15 @@ export function normalizeLevel(value: unknown): Level {
     return 'TRACE';
   }
   if (typeof value !== 'string') return 'OTHER';
-  return LEVEL_NAMES[value.trim().toUpperCase()] ?? 'OTHER';
+  const text = value.trim();
+  if (/^\d+$/.test(text)) return normalizeLevel(Number(text)); // "30" from loggers that stringify levels
+  return LEVEL_NAMES[text.toUpperCase()] ?? 'OTHER';
 }
 
 /** GELF (and syslog) severities: 0 emergency … 7 debug. */
 export function syslogLevel(value: unknown): Level {
+  if (typeof value !== 'number' && !(typeof value === 'string' && /^\s*\d+\s*$/.test(value))) return normalizeLevel(value);
   const n = Number(value);
-  if (!Number.isFinite(n)) return normalizeLevel(value);
   if (n <= 2) return 'FATAL';
   if (n === 3) return 'ERROR';
   if (n === 4) return 'WARN';
@@ -93,7 +101,7 @@ export function isGelf(obj: JsonObject): boolean {
   return typeof obj.short_message === 'string' && (obj.version === '1.1' || 'host' in obj);
 }
 
-const PLAIN_LEVEL_RE = /\b(FATAL|ERROR|SEVERE|WARN|WARNING|INFO|DEBUG|TRACE)\b/;
+const PLAIN_LEVEL_RE = /\b(FATAL|CRITICAL|ERROR|SEVERE|WARN|WARNING|INFO|DEBUG|TRACE)\b/;
 
 /** Best-effort level detection for plain-text lines. */
 export function detectPlainLevel(line: string): Level {

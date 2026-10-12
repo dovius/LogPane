@@ -38,7 +38,9 @@ async function disable(origin: string): Promise<void> {
   const remaining = (await getAutoOrigins()).filter((o) => o !== origin);
   await setAutoOrigins(remaining);
   const pattern = originPattern(origin);
-  if (!remaining.some((o) => originPattern(o) === pattern)) await chrome.permissions.remove({ origins: [pattern] });
+  if (!remaining.some((o) => originPattern(o) === pattern)) {
+    await chrome.permissions.remove({ origins: [pattern] }).catch(() => false); // e.g. not optional in a test build
+  }
   setStatus(`Disabled for ${origin}.`);
   await render();
 }
