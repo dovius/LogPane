@@ -3,8 +3,8 @@
 //
 //   node scripts/dev-server.mjs <file.log> [more.log ...] [--port 8080] [--grow]
 //
-// Each file is served as text/plain at
-//   http://localhost:<port>/api/kubernetes/api/v1/namespaces/demo/pods/<file-name>/log?container=app
+// Each file is served (on 127.0.0.1 only) as text/plain at
+//   http://127.0.0.1:<port>/api/kubernetes/api/v1/namespaces/demo/pods/<file-name>/log?container=app
 // `sinceTime` is honoured like the Kubernetes API (by each line's timestamp). With --grow a new line is
 // appended to every log every 2 seconds, to try Tail.
 import { readFileSync } from 'node:fs';
@@ -57,6 +57,8 @@ if (grow) {
   }, 2000);
 }
 
+const escapeHtml = (s) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
 const LOG_RE = /^\/api\/kubernetes\/api\/v1\/namespaces\/([^/]+)\/pods\/([^/]+)\/log$/;
 
 createServer((req, res) => {
@@ -75,7 +77,7 @@ createServer((req, res) => {
     const links = [...logs.keys()]
       .map((pod) => {
         const href = `/api/kubernetes/api/v1/namespaces/demo/pods/${encodeURIComponent(pod)}/log?container=app`;
-        return `<li><a href="${href}">${pod}</a> (${logs.get(pod).lines.length} lines)</li>`;
+        return `<li><a href="${escapeHtml(href)}">${escapeHtml(pod)}</a> (${logs.get(pod).lines.length} lines)</li>`;
       })
       .join('');
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
@@ -84,7 +86,8 @@ createServer((req, res) => {
   }
   res.writeHead(404, { 'content-type': 'text/plain' });
   res.end('not found');
-}).listen(port, () => {
-  console.log(`Raw log dev server on http://localhost:${port}/${grow ? ' (growing)' : ''}`);
-  for (const pod of logs.keys()) console.log(`  http://localhost:${port}/api/kubernetes/api/v1/namespaces/demo/pods/${encodeURIComponent(pod)}/log?container=app`);
+}).listen(port, '127.0.0.1', () => {
+  // Loopback only: the served logs are not reachable from other machines.
+  console.log(`Raw log dev server on http://127.0.0.1:${port}/${grow ? ' (growing)' : ''}`);
+  for (const pod of logs.keys()) console.log(`  http://127.0.0.1:${port}/api/kubernetes/api/v1/namespaces/demo/pods/${encodeURIComponent(pod)}/log?container=app`);
 });

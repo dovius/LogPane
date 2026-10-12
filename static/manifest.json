@@ -4,6 +4,7 @@
   "short_name": "LogPane",
   "version": "1.0.0",
   "description": "A fast, private JSON and NDJSON log viewer. Search, filter and inspect structured logs directly in your browser.",
+  "homepage_url": "https://github.com/dovius/LogPane",
   "minimum_chrome_version": "116",
   "action": {
     "default_title": "Open in LogPane",

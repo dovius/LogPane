@@ -108,4 +108,8 @@ scripts/      dev server, fixture / demo / icon generators
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Bundled third-party code: Preact (MIT), see `THIRD_PARTY_LICENSES.txt` in the build.
+
+## Trademarks
+
+Kubernetes is a registered trademark of The Linux Foundation. Red Hat and OpenShift are trademarks of Red Hat, Inc. Docker is a trademark of Docker, Inc. Java is a registered trademark of Oracle and/or its affiliates. Spring Boot is a trademark of Broadcom Inc. Quarkus is a trademark of Red Hat, Inc. Node.js is a trademark of the OpenJS Foundation. Chrome is a trademark of Google LLC. Other names may be trademarks of their respective owners. LogPane is an independent open-source project and is not affiliated with, endorsed by, or sponsored by any of them.

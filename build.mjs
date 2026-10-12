@@ -14,8 +14,23 @@ const root = dirname(fileURLToPath(import.meta.url));
 const dist = join(root, 'dist');
 const args = new Set(process.argv.slice(2));
 
+const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+
+/** Licenses of the runtime dependencies bundled into the extension (MIT requires shipping their notices). */
+function thirdPartyNotices() {
+  const parts = Object.keys(pkg.dependencies ?? {}).map((name) => {
+    const dir = join(root, 'node_modules', name);
+    const { version, license } = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
+    return `${name} ${version} (${license})\n${'-'.repeat(60)}\n${readFileSync(join(dir, 'LICENSE'), 'utf8').trim()}`;
+  });
+  return `LogPane bundles the following third-party software.\n\n${parts.join('\n\n')}\n`;
+}
+
+const banner = `/*! LogPane ${pkg.version} | MIT License | Includes Preact (MIT, Copyright (c) 2015-present Jason Miller). Full texts: LICENSE, THIRD_PARTY_LICENSES.txt */`;
+
 const common = {
   bundle: true,
+  banner: { js: banner },
   target: 'chrome116',
   jsx: 'automatic',
   jsxImportSource: 'preact',
@@ -35,13 +50,17 @@ const builds = [
 function copyStatic() {
   cpSync(join(root, 'static'), dist, { recursive: true });
   cpSync(join(root, 'src/ui/viewer.css'), join(dist, 'viewer.css'));
+  cpSync(join(root, 'LICENSE'), join(dist, 'LICENSE'));
+  writeFileSync(join(dist, 'THIRD_PARTY_LICENSES.txt'), thirdPartyNotices());
 }
 
 /** viewer.html with CSS and JS inlined, for sharing or when extensions are blocked. */
 function writeStandalone() {
   const css = readFileSync(join(dist, 'viewer.css'), 'utf8');
   const js = readFileSync(join(dist, 'viewer.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
+  const notices = `LogPane ${pkg.version}\n\n${readFileSync(join(root, 'LICENSE'), 'utf8').trim()}\n\n${thirdPartyNotices()}`.replace(/--/g, '- -');
   const html = readFileSync(join(root, 'static/viewer.html'), 'utf8')
+    .replace('<!doctype html>', () => `<!doctype html>\n<!--\n${notices}-->`)
     .replace('<link rel="stylesheet" href="viewer.css" />', () => `<style>\n${css}\n</style>`)
     .replace('<script src="viewer.js"></script>', () => `<script>\n${js}\n</script>`);
   mkdirSync(join(dist, 'standalone'), { recursive: true });

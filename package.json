@@ -2,8 +2,16 @@
   "name": "logpane",
   "version": "1.0.0",
   "private": true,
-  "description": "LogPane \u2013 a fast, private JSON and NDJSON log viewer (Chrome extension).",
+  "description": "LogPane – a fast, private JSON and NDJSON log viewer (Chrome extension).",
   "license": "MIT",
+  "homepage": "https://github.com/dovius/LogPane",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dovius/LogPane.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dovius/LogPane/issues"
+  },
   "type": "module",
   "scripts": {
     "build": "node build.mjs",

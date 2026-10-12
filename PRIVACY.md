@@ -59,4 +59,5 @@ Log content, search terms, filters and log URLs are **never** stored.
 
 ## Contact
 
-Questions or concerns: open an issue in the project repository.
+Questions or concerns: open an issue at <https://github.com/dovius/LogPane/issues>.
+Security problems: see [SECURITY.md](SECURITY.md).

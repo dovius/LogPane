@@ -48,6 +48,9 @@ No complicated setup. No subscriptions. Just readable logs.
 Open source. Free to use.
 
 Make sense of your logs with LogPane.
+
+—
+Kubernetes is a registered trademark of The Linux Foundation. Red Hat and OpenShift are trademarks of Red Hat, Inc. Docker is a trademark of Docker, Inc. Java is a registered trademark of Oracle and/or its affiliates. Spring Boot is a trademark of Broadcom Inc. Quarkus is a trademark of Red Hat, Inc. Node.js is a trademark of the OpenJS Foundation. Chrome is a trademark of Google LLC. Other names may be trademarks of their respective owners. LogPane is an independent open-source project and is not affiliated with, endorsed by, or sponsored by any of them.
 ```
 
 Supported formats, for reference:
@@ -91,10 +94,26 @@ Supported formats, for reference:
 - not used for unrelated purposes;
 - not used for creditworthiness.
 
-**Privacy policy URL:** host `PRIVACY.md`, for example the GitHub file URL of the public repository, and paste the link here.
+**Privacy policy URL:** `https://github.com/dovius/LogPane/blob/main/PRIVACY.md`
 
 ## Before submitting
 
-- [ ] Replace `LogPane contributors` in `LICENSE` with your name, if you want.
-- [ ] Publish the repository and put its URL in the listing (homepage / support URL).
-- [ ] `npm run zip` → upload `logpane-extension.zip`.
+**Name**
+- [ ] Check that you can use the name. A hosted product called **Logpane** already exists (logpane.dev, analytics / error tracking, pub.dev package `logpane`).
+  - Search EUIPO / TMview and USPTO for "LOGPANE" in classes 9 and 42.
+  - If the name is taken or contested, rename before the first submission. The listing name is hard to change once users know it.
+
+**Repository and links**
+- [ ] Repository is public. Privacy policy URL: `https://github.com/dovius/LogPane/blob/main/PRIVACY.md`.
+- [ ] Enable **Settings → Security → Private vulnerability reporting** on GitHub (SECURITY.md points to it).
+- [ ] Homepage / support URL: `https://github.com/dovius/LogPane` (also in `manifest.json` → `homepage_url`).
+
+**Developer account** (Chrome Web Store dashboard)
+- [ ] Register with a personal Google account. Use a personal contact email; it is shown to users.
+- [ ] Pay the one-time registration fee.
+- [ ] Trader declaration (EU Digital Services Act): a free, non-commercial open-source hobby project is normally **non-trader**. Declare "trader" only if you sell it or use it professionally to make money. A trader's name, address and contact are published.
+
+**Package**
+- [ ] `npm ci && npm test && npm run zip` → upload `logpane-extension.zip`. It includes `LICENSE` and `THIRD_PARTY_LICENSES.txt` (Preact, MIT).
+- [ ] Fill in the privacy practices tab as above. Use the description with the trademark notice at the end.
+- [ ] Optionally replace `LogPane contributors` in `LICENSE` with your name.
