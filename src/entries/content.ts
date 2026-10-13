@@ -81,6 +81,7 @@ async function mount(text: string, manual: boolean): Promise<void> {
     reloadPage: (state) => void chrome.runtime.sendMessage({ type: 'lv-reload-tab', state, reopen: manual }),
   });
   void store.addText({ label, kind: 'page', url: location.href }, text);
+  void chrome.runtime.sendMessage({ type: 'lv-active' }).catch(() => undefined); // colour toolbar icon in this tab
 
   chrome.runtime.onMessage.addListener((msg: { type?: unknown }, sender) => {
     if (sender.id === chrome.runtime.id && msg?.type === 'lv-toggle') toggleRaw();

@@ -27,6 +27,7 @@ Details: [PRIVACY.md](PRIVACY.md).
 - **Details panel**: the message (JSON inside it pretty-printed), the stack trace, then the fields grouped into trace IDs, context (nested objects flattened) and host / process. Values can be copied or searched one by one; ↑ / ↓ move to the neighbouring entry. The raw JSON is one click away.
 - **Stack traces**: structured exceptions (Quarkus `frames` / `causedBy` / `suppressed`), `stack_trace` strings and plain-text Java traces are shown as normal Java stack traces you can paste into the IDE, with a summary of the cause chain. Framework frames are dimmed and long runs of them folded.
 - **Several logs at once**: add files or Raw URLs, merged by timestamp, so you can follow one trace across services.
+- **Toolbar icon** is grey, and lights up in colour on tabs where LogPane is open.
 - **Safe with untrusted logs**: log text is never treated as markup, crafted lines can't freeze or break the viewer, and control characters are shown and escaped. See [SECURITY.md](SECURITY.md#how-logpane-protects-you).
 - **Reload and live tail** for Kubernetes / OpenShift pod logs (uses `sinceTime`, pauses in background tabs).
   Some consoles answer the viewer's own requests with 401 and accept only real page loads. There, Reload reloads the tab like F5, and Tail reloads it every ≥ 10 s (shown as **Tail ↻**). Search, filters, selection and scroll position are kept across reloads.

@@ -159,12 +159,32 @@ function draw(size, pad = 0) {
       buf[i + 3] = Math.round(clamp(alpha) * 255);
     }
   }
-  return png(size, buf);
+  return buf;
 }
+
+/**
+ * The toolbar icon while LogPane is not open in the tab: the same artwork in grey with less contrast,
+ * so it reads as "off" on light and dark toolbars and lights up (the colour icon) once LogPane runs.
+ */
+function idle(rgba) {
+  const out = Buffer.from(rgba);
+  for (let i = 0; i < out.length; i += 4) {
+    const lum = 0.299 * out[i] + 0.587 * out[i + 1] + 0.114 * out[i + 2];
+    const v = Math.round(IDLE_KEEP * lum + (1 - IDLE_KEEP) * IDLE_GREY);
+    out[i] = out[i + 1] = out[i + 2] = v;
+  }
+  return out;
+}
+const IDLE_KEEP = 0.45; // share of the original contrast
+const IDLE_GREY = 140; // the grey everything is pulled towards
 
 mkdirSync(outDir, { recursive: true });
 // Toolbar sizes use the full canvas. The 128 store icon follows the Web Store rule:
 // 96×96 artwork with 16 px of transparent padding.
-for (const size of [16, 32, 48]) writeFileSync(join(outDir, `icon${size}.png`), draw(size));
-writeFileSync(join(outDir, 'icon128.png'), draw(128, 16));
+for (const size of [16, 32, 48]) {
+  const art = draw(size);
+  writeFileSync(join(outDir, `icon${size}.png`), png(size, art));
+  writeFileSync(join(outDir, `idle${size}.png`), png(size, idle(art)));
+}
+writeFileSync(join(outDir, 'icon128.png'), png(128, draw(128, 16)));
 console.log(`icons written to ${outDir}`);

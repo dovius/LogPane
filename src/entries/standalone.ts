@@ -4,6 +4,8 @@ import { loadSettings } from '../ui/settings';
 import { LogStore } from '../ui/store';
 
 async function main(): Promise<void> {
+  // As the extension's own file viewer tab: colour toolbar icon there too (logpane.html has no extension APIs).
+  if (location.protocol === 'chrome-extension:') void chrome.runtime.sendMessage({ type: 'lv-active' }).catch(() => undefined);
   const root = document.getElementById('lv-root')!;
   mountApp(root, {
     store: new LogStore(),

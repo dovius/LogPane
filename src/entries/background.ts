@@ -2,6 +2,22 @@ import { AUTO_ORIGINS_KEY, AUTO_SCRIPT_ID, RAW_LOG_PATH, getAutoOrigins, normali
 
 const TEXT_TYPES = ['text/plain', 'application/json', 'application/x-ndjson', 'application/jsonl'];
 
+// The toolbar icon is grey (manifest default) and turns to colour in tabs where LogPane is open.
+const ACTIVE_ICON = { 16: 'icons/icon16.png', 32: 'icons/icon32.png', 48: 'icons/icon48.png' };
+const IDLE_ICON = { 16: 'icons/idle16.png', 32: 'icons/idle32.png', 48: 'icons/idle48.png' };
+const IDLE_TITLE = 'Open in LogPane';
+
+function markActive(tabId: number): void {
+  void chrome.action.setIcon({ tabId, path: ACTIVE_ICON }).catch(() => undefined);
+  void chrome.action.setTitle({ tabId, title: 'LogPane is open on this page. Click to switch between the viewer and the raw text' });
+}
+
+/** Tab-specific icons are kept until the tab closes, so every navigation puts the grey one back. */
+function markIdle(tabId: number): void {
+  void chrome.action.setIcon({ tabId, path: IDLE_ICON }).catch(() => undefined);
+  void chrome.action.setTitle({ tabId, title: IDLE_TITLE });
+}
+
 async function openViewerTab(): Promise<void> {
   await chrome.tabs.create({ url: chrome.runtime.getURL('viewer.html') });
 }
@@ -19,7 +35,7 @@ chrome.action.onClicked.addListener(async (tab) => {
   if (tab.id === undefined) return openViewerTab();
   const target = { tabId: tab.id };
   void chrome.action.setBadgeText({ tabId: tab.id, text: '' });
-  void chrome.action.setTitle({ tabId: tab.id, title: 'Open in LogPane' });
+  void chrome.action.setTitle({ tabId: tab.id, title: IDLE_TITLE }); // drops "Click to reopen…"; an opened viewer sets its own
   // A saved view waiting for this tab is handed over only if the viewer opens on the same page (lv-take-view).
   try {
     const [probe] = await chrome.scripting.executeScript({
@@ -28,6 +44,7 @@ chrome.action.onClicked.addListener(async (tab) => {
     });
     const info = probe?.result as { contentType: string; mounted: boolean } | undefined;
     if (info?.mounted) {
+      markActive(tab.id);
       await chrome.tabs.sendMessage(tab.id, { type: 'lv-toggle' });
       return;
     }
@@ -73,6 +90,8 @@ const unhide = (tabId: number) =>
   chrome.scripting.executeScript({ target: { tabId }, func: () => document.documentElement.classList.remove('lv-pending') }).catch(() => undefined);
 
 chrome.tabs.onUpdated.addListener(async (tabId, info, tab) => {
+  // before anything else: the new page reports itself again once LogPane runs in it
+  if (info.status === 'loading') markIdle(tabId);
   if (info.status !== 'loading' && info.status !== 'complete') return;
   const key = pendingKey(tabId);
   const pending = (await chrome.storage.session.get(key))[key] as PendingReload | undefined;
@@ -138,6 +157,7 @@ chrome.runtime.onMessage.addListener((msg: { type?: unknown; state?: unknown; re
   if (sender.id !== chrome.runtime.id || sender.frameId !== 0) return;
   const tabId = sender.tab?.id;
   if (tabId === undefined || !sender.url) return;
+  if (msg?.type === 'lv-active') return markActive(tabId);
   if (msg?.type === 'lv-reload-tab') {
     let state = msg.state ?? null;
     try {
