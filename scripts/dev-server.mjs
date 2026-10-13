@@ -44,8 +44,10 @@ function splitLines(text) {
  *        'network' drops the connection (like a CORS / network error), 'login-page' answers with an HTML login page
  * @param {Record<string, {status?: number, headers?: Record<string, string>, body?: string}>} [options.routes]
  *        extra fixed responses by pathname (error pages, HTML instead of a log, …)
+ * @param {number} [options.loginAfterNavigations]  after this many page loads of logs, page loads are redirected
+ *        to an HTML login page on the same server (an expired console session)
  */
-export function startDevServer({ logs: input, port = 0, growEveryMs = 0, navigationOnly = false, rejectFetch, routes = {} }) {
+export function startDevServer({ logs: input, port = 0, growEveryMs = 0, navigationOnly = false, rejectFetch, routes = {}, loginAfterNavigations }) {
   /** pod name → { lines, times } where times[i] approximates the kubelet write time of lines[i]. */
   const logs = new Map();
   const append = (pod, newLines) => {
@@ -59,6 +61,7 @@ export function startDevServer({ logs: input, port = 0, growEveryMs = 0, navigat
   for (const [pod, text] of Object.entries(input)) append(pod, splitLines(text));
 
   let n = 0;
+  let navigations = 0;
   const timer = growEveryMs
     ? setInterval(() => {
         for (const pod of logs.keys()) {
@@ -82,6 +85,16 @@ export function startDevServer({ logs: input, port = 0, growEveryMs = 0, navigat
     }
     const m = LOG_RE.exec(url.pathname);
     const navigation = req.headers['sec-fetch-mode'] === 'navigate';
+    if (url.pathname === '/login') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end('<!doctype html><title>Log in</title><form>Your session expired. Log in to continue.</form>');
+      return;
+    }
+    if (m && navigation && loginAfterNavigations !== undefined && ++navigations > loginAfterNavigations) {
+      res.writeHead(302, { location: `/login?then=${encodeURIComponent(url.pathname)}` });
+      res.end();
+      return;
+    }
     if (m && navigationOnly && !navigation) {
       res.writeHead(401, { 'content-length': '0' });
       res.end();

@@ -386,6 +386,7 @@ export function App(props: AppProps) {
   const handlersRef = useRef<{ key: (e: KeyboardEvent) => void; paste: (e: ClipboardEvent) => void }>();
   {
     const onKey = (e: KeyboardEvent) => {
+      if (!e.isTrusted) return; // only the user's own keys, not events the page dispatches
       if (adding) {
         if (e.key === 'Escape') setAdding(false);
         return;
@@ -438,6 +439,7 @@ export function App(props: AppProps) {
       e.preventDefault();
     };
     const onPaste = (e: ClipboardEvent) => {
+      // only the file viewer takes pastes: no page scripts run there, so no isTrusted check is needed
       if (props.mode !== 'standalone' || adding || isField(e.target)) return;
       const text = e.clipboardData?.getData('text/plain');
       if (text?.trim()) addPaste(text);
@@ -539,7 +541,8 @@ export function App(props: AppProps) {
           <button
             type="button"
             class="lv-btn lv-btn-small lv-primary"
-            onClick={() => {
+            onClick={(e) => {
+              if (!e.isTrusted) return; // a page script can't open the setup window
               props.autoPrompt!.onEnable();
               setPromptOpen(false);
             }}
@@ -549,7 +552,8 @@ export function App(props: AppProps) {
           <button
             type="button"
             class="lv-btn lv-btn-small"
-            onClick={() => {
+            onClick={(e) => {
+              if (!e.isTrusted) return;
               props.autoPrompt!.onDismiss();
               setPromptOpen(false);
             }}

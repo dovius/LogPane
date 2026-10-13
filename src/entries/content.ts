@@ -4,8 +4,8 @@ import { looksLikeJsonLog } from '../core/parse';
 import { labelForUrl } from '../core/sources';
 import { mountApp, type AutoPrompt } from '../ui/App';
 import { loadSettings } from '../ui/settings';
-import { LogStore } from '../ui/store';
-import type { ViewState } from '../ui/viewState';
+import { LogStore, MAX_LOG_BYTES } from '../ui/store';
+import { sanitizeViewState, type ViewState } from '../ui/viewState';
 import { dismissOrigin, getAutoOrigins, getDismissedOrigins, isRawLogPath } from './autoOrigins';
 
 declare global {
@@ -26,7 +26,8 @@ function waitForDocument(): Promise<void> {
   return new Promise((resolve) => document.addEventListener('DOMContentLoaded', () => resolve(), { once: true }));
 }
 
-const openAutoSetup = () => void chrome.runtime.sendMessage({ type: 'lv-open-options', origin: location.origin });
+// the background takes the origin from the sender, not from the message
+const openAutoSetup = () => void chrome.runtime.sendMessage({ type: 'lv-open-options' });
 
 /** After a manual open on a Raw log page, offer to skip the toolbar click next time. */
 async function autoPrompt(): Promise<AutoPrompt | undefined> {
@@ -39,7 +40,7 @@ async function autoPrompt(): Promise<AutoPrompt | undefined> {
 /** View state saved before this page was reloaded by the viewer itself, if any. */
 async function takeViewState(): Promise<ViewState | undefined> {
   try {
-    return ((await chrome.runtime.sendMessage({ type: 'lv-take-view' })) as ViewState | null) ?? undefined;
+    return sanitizeViewState(await chrome.runtime.sendMessage({ type: 'lv-take-view' }));
   } catch {
     return undefined;
   }
@@ -64,7 +65,7 @@ async function mount(text: string, manual: boolean): Promise<void> {
   document.title = `${label} – LogPane`;
 
   const store = new LogStore();
-  const [initialSettings, prompt, initialView] = await Promise.all([loadSettings(), manual ? autoPrompt() : undefined, takeViewState()]);
+  const [initialSettings, prompt, initialView] = await Promise.all([loadSettings(), manual && web ? autoPrompt() : undefined, takeViewState()]);
   mountApp(root, {
     store,
     mode: 'page',
@@ -73,7 +74,7 @@ async function mount(text: string, manual: boolean): Promise<void> {
     pageReloadOnly: !web,
     baseUrl: location.href,
     onShowRaw: toggleRaw,
-    onAutoOpen: openAutoSetup,
+    onAutoOpen: web ? openAutoSetup : undefined,
     autoPrompt: prompt,
     initialView,
     // Reload the tab like F5 (the background keeps the view state and re-opens a manually opened viewer).
@@ -87,8 +88,9 @@ async function mount(text: string, manual: boolean): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  if (window.__lvMounted) return;
-  const manual = Boolean(window.__lvManual);
+  // `=== true`: an element with id="__lvMounted" in the page would also show up as window.__lvMounted
+  if (window.__lvMounted === true) return;
+  const manual = window.__lvManual === true;
   if (!manual && !TEXT_TYPES.includes(document.contentType)) return;
   // Automatic mode runs at document_start: keep the raw text hidden while it streams in, so it never flashes.
   const html = document.documentElement;
@@ -98,7 +100,7 @@ async function main(): Promise<void> {
     const pre = document.querySelector('body > pre');
     const text = pre?.textContent ?? document.body?.innerText ?? '';
     // Automatic mode only takes over pages that really are JSON logs.
-    if (!manual && !looksLikeJsonLog(text)) return;
+    if (!manual && (text.length > MAX_LOG_BYTES || !looksLikeJsonLog(text))) return;
     await mount(text, manual);
   } finally {
     html.classList.remove('lv-pending');

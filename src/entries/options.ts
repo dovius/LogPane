@@ -69,7 +69,7 @@ $('add-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const input = $<HTMLInputElement>('origin-input');
   const origin = normalizeOrigin(input.value);
-  if (!origin) return setStatus('Enter a URL such as https://console-openshift-console.apps.example.com', true);
+  if (!origin) return setStatus('Enter one https domain, such as https://console-openshift-console.apps.example.com (no wildcards; plain http only for localhost).', true);
   input.value = '';
   enable(origin);
 });

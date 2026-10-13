@@ -22,19 +22,34 @@ export function originPattern(origin: string): string {
   return `${u.protocol}//${u.hostname}/*`;
 }
 
+// DNS names and IPv4 addresses (URL() has already lowercased and punycoded them): no `*`, `%`, empty labels.
+const HOST_RE = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+/** Plain http is accepted only on this machine: elsewhere anyone on the network could supply the page. */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1']);
+
+/**
+ * The origin to enable automatic opening for, or null. One concrete https host (or a local http one):
+ * `*`, `*.example.com` and the like would turn into match patterns for many sites.
+ */
 export function normalizeOrigin(input: string): string | null {
   try {
-    const u = new URL(input.trim().includes('://') ? input.trim() : `https://${input.trim()}`);
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
-    return u.origin;
+    const text = input.trim();
+    const u = new URL(text.includes('://') ? text : `https://${text}`);
+    if (!HOST_RE.test(u.hostname)) return null;
+    if (u.protocol === 'https:' || (u.protocol === 'http:' && LOCAL_HOSTS.has(u.hostname))) return u.origin;
+    return null;
   } catch {
     return null;
   }
 }
 
+/** Stored lists are checked again when read: only valid origins in their normalised form. */
+function validOrigins(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((o): o is string => typeof o === 'string' && normalizeOrigin(o) === o) : [];
+}
+
 export async function getAutoOrigins(): Promise<string[]> {
-  const got = await chrome.storage.local.get(AUTO_ORIGINS_KEY);
-  return Array.isArray(got[AUTO_ORIGINS_KEY]) ? (got[AUTO_ORIGINS_KEY] as string[]) : [];
+  return validOrigins((await chrome.storage.local.get(AUTO_ORIGINS_KEY))[AUTO_ORIGINS_KEY]);
 }
 
 export async function setAutoOrigins(origins: string[]): Promise<void> {
@@ -43,10 +58,11 @@ export async function setAutoOrigins(origins: string[]): Promise<void> {
 
 /** Origins where the user answered "Not now" to the auto-open suggestion. */
 export async function getDismissedOrigins(): Promise<string[]> {
-  const got = await chrome.storage.local.get(AUTO_PROMPT_DISMISSED_KEY);
-  return Array.isArray(got[AUTO_PROMPT_DISMISSED_KEY]) ? (got[AUTO_PROMPT_DISMISSED_KEY] as string[]) : [];
+  return validOrigins((await chrome.storage.local.get(AUTO_PROMPT_DISMISSED_KEY))[AUTO_PROMPT_DISMISSED_KEY]);
 }
 
-export async function dismissOrigin(origin: string): Promise<void> {
+export async function dismissOrigin(input: string): Promise<void> {
+  const origin = normalizeOrigin(input);
+  if (!origin) return;
   await chrome.storage.local.set({ [AUTO_PROMPT_DISMISSED_KEY]: [...new Set([...(await getDismissedOrigins()), origin])] });
 }

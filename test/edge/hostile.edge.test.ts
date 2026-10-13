@@ -9,7 +9,10 @@ import { SINCE_TIME_MAX_AHEAD_MS, withSinceTime, withoutFollow } from '../../src
 import { formatException } from '../../src/core/stacktrace';
 import { groupFields, splitPlainStack } from '../../src/ui/fieldGroups';
 import { jsonTokens, parseStackLine, stackParts } from '../../src/ui/format';
+import { getAutoOrigins, getDismissedOrigins, normalizeOrigin } from '../../src/entries/autoOrigins';
+import { DEFAULT_SETTINGS, sanitizeSettings } from '../../src/ui/settings';
 import { FETCH_IDLE_MS, LimitError, fetchText } from '../../src/ui/store';
+import { sanitizeViewState } from '../../src/ui/viewState';
 
 const deep = (n: number): unknown => {
   let v: unknown = 1;
@@ -177,5 +180,54 @@ describe('Tail and fetching', () => {
     const check = expect(done).rejects.toThrow(/No data from the server/);
     await vi.advanceTimersByTimeAsync(FETCH_IDLE_MS + 10);
     await check;
+  });
+});
+
+describe('stored values are checked when read', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('automatic opening accepts one concrete https host, or plain http on this machine', () => {
+    expect(normalizeOrigin('console-openshift-console.apps.example.com')).toBe('https://console-openshift-console.apps.example.com');
+    expect(normalizeOrigin(' https://Console.Example.com:8443/path?x#y ')).toBe('https://console.example.com:8443');
+    expect(normalizeOrigin('https://bücher.example')).toBe('https://xn--bcher-kva.example');
+    expect(normalizeOrigin('http://localhost:8080/api')).toBe('http://localhost:8080');
+    expect(normalizeOrigin('http://127.0.0.1:9000')).toBe('http://127.0.0.1:9000');
+    for (const bad of ['*', '*.example.com', 'https://*.example.com', 'https://a..b', 'https://exa mple.com', 'https://under_score.example.com','http://console.example.com', 'ftp://example.com', 'file:///etc', 'javascript:alert(1)', 'chrome://extensions', '<all_urls>', '', 'https://[::1]']) {
+      expect(normalizeOrigin(bad), bad).toBeNull();
+    }
+  });
+
+  it('stored origin lists keep only valid, normalised entries', async () => {
+    const stored: Record<string, unknown> = {
+      autoOrigins: ['https://ok.example.com', '*', 'https://*.example.com', 42, null, 'http://plain.example.com', 'https://OK.example.com'],
+      autoPromptDismissed: 'not a list',
+    };
+    vi.stubGlobal('chrome', { storage: { local: { get: async (key: string) => ({ [key]: stored[key] }) } } });
+    expect(await getAutoOrigins()).toEqual(['https://ok.example.com']);
+    expect(await getDismissedOrigins()).toEqual([]);
+  });
+
+  it('settings outside their ranges fall back to the defaults', () => {
+    const good = { timeMode: 'local', fontSize: 14, detailsWidth: 640, showLogger: false, showThread: true, tailSeconds: 10, contextLines: 50 };
+    expect(sanitizeSettings(good)).toEqual(good);
+    expect(sanitizeSettings({ timeMode: 'mars', fontSize: 1e9, detailsWidth: -5, showLogger: 'yes', tailSeconds: 0.001, contextLines: '20' })).toEqual(DEFAULT_SETTINGS);
+    expect(sanitizeSettings(JSON.parse('{"__proto__":{"fontSize":30},"constructor":1}'))).toEqual(DEFAULT_SETTINGS);
+    expect(sanitizeSettings(null)).toEqual(DEFAULT_SETTINGS);
+    expect(sanitizeSettings('{"fontSize":12}')).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('a restored view keeps only well-formed values', () => {
+    expect(sanitizeViewState(null)).toBeUndefined();
+    expect(sanitizeViewState('x')).toBeUndefined();
+    const v = sanitizeViewState({
+      query: 'ORD-1', selectedLine: 12, scrollTop: 300, atBottom: true, tailSeconds: 5, tailByReload: true,
+      filter: { text: 'ORD-1', regex: 1, levels: ['ERROR', 'NOPE', '__proto__'], loggers: ['a', 2], hiddenSources: [1, 'x', 2.5], traceId: { a: 1 }, fromMs: Infinity, toMs: 5 },
+    });
+    expect(v).toEqual({
+      query: 'ORD-1', selectedLine: 12, scrollTop: 300, atBottom: true, tailSeconds: 5, tailByReload: true,
+      filter: { text: 'ORD-1', regex: false, caseSensitive: false, levels: ['ERROR'], loggers: ['a'], hiddenSources: [1], traceId: '', fromMs: null, toMs: 5 },
+    });
+    expect(sanitizeViewState({ tailSeconds: 0.001, selectedLine: -3, scrollTop: -1 })).toMatchObject({ tailSeconds: 0, selectedLine: undefined, scrollTop: 0 });
+    expect(sanitizeViewState({ query: 'x'.repeat(20_000) })!.query).toHaveLength(10_000);
   });
 });

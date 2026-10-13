@@ -105,9 +105,12 @@ describe('options page', () => {
     await page.fill('#origin-input', 'http://localhost:12345/some/path');
     await page.click('#add-form button[type=submit]');
     await page.waitForFunction(() => document.querySelector('#origins')?.textContent?.includes('http://localhost:12345'));
-    await page.fill('#origin-input', 'ftp://nope');
-    await page.click('#add-form button[type=submit]');
-    expect(await page.textContent('#status')).toContain('Enter a URL');
+    // one concrete https domain (or localhost): no other schemes, no wildcards, no plain http elsewhere
+    for (const bad of ['ftp://nope', '*', '*.example.com', 'https://*.example.com', 'http://console.example.com', 'https://a..b']) {
+      await page.fill('#origin-input', bad);
+      await page.click('#add-form button[type=submit]');
+      expect(await page.textContent('#status'), bad).toContain('Enter one https domain');
+    }
     await page.locator('#origins li', { hasText: 'http://localhost:12345' }).locator('button').click();
     await page.waitForFunction(() => !document.querySelector('#origins')?.textContent?.includes('http://localhost:12345'));
     await page.locator('#origins li', { hasText: origin() }).locator('button').click();

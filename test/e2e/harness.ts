@@ -25,6 +25,7 @@ export function serve(options: {
   rejectFetch?: 'network' | 'login-page';
   growEveryMs?: number;
   routes?: Record<string, { status?: number; headers?: Record<string, string>; body?: string }>;
+  loginAfterNavigations?: number;
 }): Promise<DevServer> {
   return startDevServer(options);
 }

@@ -3,14 +3,11 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import type { FilterState } from '../core/filter';
 import { formatFull, parseUserTime, type TimeMode } from '../core/time';
 import type { Level, LevelCounts } from '../core/types';
-import type { Settings } from './settings';
+import { MAX_FONT_SIZE, MIN_FONT_SIZE, type Settings } from './settings';
 import type { SourceState } from './store';
-import { RELOAD_TAIL_MIN_SECONDS } from './viewState';
+import { RELOAD_TAIL_MIN_SECONDS, TAIL_OPTIONS } from './viewState';
 import { Popover } from './widgets';
 
-const TAIL_OPTIONS = [0, 2, 5, 10, 30];
-const MIN_FONT = 9;
-const MAX_FONT = 20;
 /** Quick ranges of the Time filter, counted back from the newest entry (logs are often hours old). */
 const LAST_RANGES: [string, number][] = [['1 min', 60_000], ['5 min', 300_000], ['15 min', 900_000], ['1 hour', 3_600_000], ['6 hours', 21_600_000]];
 
@@ -66,7 +63,7 @@ export function Header(props: {
       <div class="lv-header-right">
         {props.canRefetch && (
           <>
-            <button type="button" class="lv-btn" disabled={props.busy} onClick={props.onReload} title="Fetch the log again (filters are kept)">
+            <button type="button" class="lv-btn" disabled={props.busy} onClick={(e) => e.isTrusted && props.onReload()} title="Fetch the log again (filters are kept)">
               ⟳ <span class="lv-btn-text">Reload</span>
             </button>
             <label
@@ -99,9 +96,9 @@ export function Header(props: {
               <div class="lv-menu-row">
                 <span class="lv-menu-label">Text size</span>
                 <div class="lv-seg" role="group" aria-label="Text size">
-                  <button type="button" title="Smaller text" disabled={s.fontSize <= MIN_FONT} onClick={() => props.onSettings({ fontSize: Math.max(MIN_FONT, s.fontSize - 1) })}>A−</button>
+                  <button type="button" title="Smaller text" disabled={s.fontSize <= MIN_FONT_SIZE} onClick={() => props.onSettings({ fontSize: Math.max(MIN_FONT_SIZE, s.fontSize - 1) })}>A−</button>
                   <span class="lv-seg-label">{s.fontSize}px</span>
-                  <button type="button" title="Larger text" disabled={s.fontSize >= MAX_FONT} onClick={() => props.onSettings({ fontSize: Math.min(MAX_FONT, s.fontSize + 1) })}>A+</button>
+                  <button type="button" title="Larger text" disabled={s.fontSize >= MAX_FONT_SIZE} onClick={() => props.onSettings({ fontSize: Math.min(MAX_FONT_SIZE, s.fontSize + 1) })}>A+</button>
                 </div>
               </div>
               <hr />
@@ -122,7 +119,7 @@ export function Header(props: {
                 />
               </label>
               {props.onAutoOpen && (
-                <button type="button" class="lv-btn lv-menu-item" onClick={props.onAutoOpen}>
+                <button type="button" class="lv-btn lv-menu-item" onClick={(e) => e.isTrusted && props.onAutoOpen?.()}>
                   Open automatically on this domain…
                 </button>
               )}
