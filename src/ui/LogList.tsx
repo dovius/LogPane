@@ -1,7 +1,7 @@
 import type { RefObject } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { mayContainJson } from '../core/embedded';
-import { entryToRow } from '../core/exportText';
+import { alignRows, entryToCells, rowsToHtml } from '../core/exportText';
 import { highlightPieces } from '../core/filter';
 import { escapeControls, visibleControls } from '../core/safeText';
 import { formatTime, type TimeMode } from '../core/time';
@@ -85,8 +85,9 @@ export function LogList(props: {
     return () => ro.disconnect();
   }, []);
 
-  // Grid cells copy badly (glued or one per line), so a selection over several cells or rows is
-  // copied as one tab-separated line per entry. A selection inside a single cell copies as usual.
+  // Grid cells copy badly (glued or one per line), so a selection over several cells or rows is copied
+  // as one line per entry with the columns lined up by spaces, plus an HTML table for spreadsheets.
+  // A selection inside a single cell copies as usual.
   const copyState = useRef(props);
   copyState.current = props;
   useEffect(() => {
@@ -113,12 +114,14 @@ export function LogList(props: {
         .map((row) => Number(row.dataset.pos));
       if (!positions.length) return;
       const { entries, indices, cols, timeMode, withDate, sources } = copyState.current;
-      const lines: string[] = [];
+      const rows: string[][] = [];
       for (let pos = Math.min(...positions); pos <= Math.max(...positions); pos++) {
         const e = entries[indices[pos]];
-        lines.push(entryToRow(e, { timeMode, withDate, logger: cols.logger, thread: cols.thread, source: cols.source ? sources.get(e.sourceId)?.label ?? '' : undefined }));
+        rows.push(entryToCells(e, { timeMode, withDate, logger: cols.logger, thread: cols.thread, source: cols.source ? sources.get(e.sourceId)?.label ?? '' : undefined }));
       }
-      ev.clipboardData?.setData('text/plain', escapeControls(lines.join('\n')));
+      const safe = rows.map((row) => row.map(escapeControls));
+      ev.clipboardData?.setData('text/plain', alignRows(safe));
+      ev.clipboardData?.setData('text/html', rowsToHtml(safe));
       ev.preventDefault();
     };
     document.addEventListener('copy', onCopy);

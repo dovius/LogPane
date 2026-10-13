@@ -1,36 +1,74 @@
 import { describe, expect, it } from 'vitest';
-import { contextRange, entriesToNdjson, entriesToText, entryToRow, entryToText, stackTraceOf, type RowColumns } from '../../src/core/exportText';
+import { alignRows, contextRange, entriesToNdjson, entriesToText, entryToCells, entryToText, rowsToHtml, stackTraceOf, type RowColumns } from '../../src/core/exportText';
 import { parseText } from '../../src/core/parse';
 
 const ALL: RowColumns = { timeMode: 'utc', withDate: false, logger: true, thread: true };
 const one = (line: string) => parseText(line, 1)[0];
 
-describe('entryToRow', () => {
+describe('entryToCells', () => {
   const e = one(JSON.stringify({ timestamp: '2026-10-01T10:00:00.123456Z', level: 'WARN', loggerName: 'com.acme.Svc', threadName: 'main', message: 'slow' }));
 
-  it('writes the visible columns in order', () => {
-    expect(entryToRow(e, ALL)).toBe('10:00:00.123\tWARN\tcom.acme.Svc\tmain\tslow');
-    expect(entryToRow(e, { ...ALL, withDate: true, source: 'pod-a' })).toBe('10-01 10:00:00.123\tWARN\tpod-a\tcom.acme.Svc\tmain\tslow');
-    expect(entryToRow(e, { ...ALL, source: '' }).split('\t')).toHaveLength(6); // an empty label still takes its column
-    expect(entryToRow(e, { timeMode: 'utc', withDate: false, logger: false, thread: false })).toBe('10:00:00.123\tWARN\tslow');
+  it('gives the visible columns in order', () => {
+    expect(entryToCells(e, ALL)).toEqual(['10:00:00.123', 'WARN', 'com.acme.Svc', 'main', 'slow']);
+    expect(entryToCells(e, { ...ALL, withDate: true, source: 'pod-a' })).toEqual(['10-01 10:00:00.123', 'WARN', 'pod-a', 'com.acme.Svc', 'main', 'slow']);
+    expect(entryToCells(e, { ...ALL, source: '' })).toHaveLength(6); // an empty label still takes its column
+    expect(entryToCells(e, { timeMode: 'utc', withDate: false, logger: false, thread: false })).toEqual(['10:00:00.123', 'WARN', 'slow']);
   });
 
   it('entries without a timestamp or level leave those columns empty', () => {
-    expect(entryToRow(one('{"message":"no time"}'), ALL)).toBe('\t\t\t\tno time');
-    expect(entryToRow(one('just text'), ALL)).toBe('\t\t\t\tjust text');
+    expect(entryToCells(one('{"message":"no time"}'), ALL)).toEqual(['', '', '', '', 'no time']);
+    expect(entryToCells(one('just text'), ALL)).toEqual(['', '', '', '', 'just text']);
   });
 
-  // BUG: a tab inside a value is copied verbatim, so the row gets extra columns and no longer lines up when pasted into a spreadsheet
-  it('keeps exactly one column per field when values contain tabs', () => {
-    const tabbed = one(JSON.stringify({ timestamp: '2026-10-01T10:00:00Z', level: 'INFO', loggerName: 'a.B', threadName: 'pool\t1', message: 'k=v\tk2=v2' }));
-    expect(entryToRow(tabbed, ALL).split('\t')).toHaveLength(5);
+  it('keeps one line per cell except the message, and no tabs anywhere', () => {
+    const tabbed = one(JSON.stringify({ timestamp: '2026-10-01T10:00:00Z', level: 'INFO', loggerName: 'a.B', threadName: 'pool\t1\nx', message: 'k=v\tk2=v2' }));
+    expect(entryToCells(tabbed, ALL)).toEqual(['10:00:00.000', 'INFO', 'a.B', 'pool 1 x', 'k=v    k2=v2']);
+  });
+});
+
+describe('alignRows', () => {
+  const rows = [
+    ['09:18:20.795', 'INFO', 'com.example.orders.api.OrderResource', 'POST /api/orders customer=C-1592'],
+    ['09:18:20.799', 'INFO', 'com.example.orders.service.CheckoutService', 'Order created: {"orderId":"ORD-48357"}'],
+    ['09:18:25.411', 'DEBUG', 'io.smallrye.health', 'Health check UP (database, kafka)'],
+    ['09:18:26.000', '', '', ''],
+  ];
+
+  it('lines the columns up with spaces, two between columns', () => {
+    expect(alignRows(rows).split('\n')).toEqual([
+      '09:18:20.795  INFO   com.example.orders.api.OrderResource        POST /api/orders customer=C-1592',
+      '09:18:20.799  INFO   com.example.orders.service.CheckoutService  Order created: {"orderId":"ORD-48357"}',
+      '09:18:25.411  DEBUG  io.smallrye.health                          Health check UP (database, kafka)',
+      '09:18:26.000', // nothing after the last value: no trailing spaces
+    ]);
   });
 
-  it('current behaviour: a multi-line message (folded stack trace) spans several lines of the copied text', () => {
+  it('indents a multi-line message (stack trace) under the message column', () => {
     const [plain] = parseText('2026-10-01 10:00:00 ERROR boom\n\tat a.B.c(B.java:1)\nCaused by: x', 1);
-    const row = entryToRow(plain, ALL);
-    expect(row.split('\n')).toHaveLength(3);
-    expect(row.split('\n')[0]).toBe('10:00:00.000\tERROR\t\t\t2026-10-01 10:00:00 ERROR boom');
+    const lines = alignRows([entryToCells(plain, ALL), ['10:00:01.000', 'INFO', 'a.Long.Logger', 'main', 'next']]).split('\n');
+    expect(lines).toHaveLength(4);
+    const col = lines[0].indexOf('2026-10-01 10:00:00 ERROR boom');
+    expect(lines[1]).toBe(`${' '.repeat(col)}    at a.B.c(B.java:1)`);
+    expect(lines[2]).toBe(`${' '.repeat(col)}Caused by: x`);
+    expect(lines[3].indexOf('next')).toBe(col);
+  });
+
+  it("doesn't pad past 60 characters for one very long value", () => {
+    const long = 'x'.repeat(100);
+    const lines = alignRows([['a', long, 'm1'], ['b', 'short', 'm2']]).split('\n');
+    expect(lines[0]).toBe(`a  ${long}  m1`);
+    expect(lines[1]).toBe(`b  ${'short'.padEnd(60)}  m2`);
+  });
+});
+
+describe('rowsToHtml', () => {
+  it('is a table with one cell per column, and escapes everything', () => {
+    const html = rowsToHtml([['09:00:00.000', 'INFO', '<img src=x onerror=alert(1)>', 'a & "b"\n\tat c']]);
+    expect(html.startsWith('<table')).toBe(true);
+    expect(html.match(/<td/g)).toHaveLength(4);
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).toContain('a &amp; &quot;b&quot;\n\tat c');
+    expect(html).not.toContain('<img');
   });
 });
 

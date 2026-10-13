@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { extractEmbeddedJson } from '../src/core/embedded';
-import { contextRange, entryToRow, entryToText } from '../src/core/exportText';
+import { alignRows, contextRange, entryToCells, entryToText } from '../src/core/exportText';
 import { EMPTY_FILTER, applyFilter, highlightPieces, parseQuery, type FilterState } from '../src/core/filter';
 import { mergeEntries } from '../src/core/merge';
 import { parseText } from '../src/core/parse';
@@ -183,15 +183,17 @@ describe('export', () => {
     expect(entryToText(sample[7], 'utc', 'pod-a')).toMatch(/^\[pod-a\] Exception in thread/);
   });
 
-  it('formats a list row as tab-separated columns with full values', () => {
+  it('formats a list row as columns with full values, lined up when copied', () => {
     const cols = { timeMode: 'utc' as const, withDate: false, logger: true, thread: false };
-    expect(entryToRow(sample[5], cols)).toBe(
-      '13:55:50.884\tERROR\tcom.example.adapter.processors.ErrorProcessor\tConnection failure [errorCode=E-1002]: HTTP operation failed with statusCode: 500',
-    );
-    expect(entryToRow(sample[5], { ...cols, logger: false, thread: true, source: 'pod-a' }).split('\t')).toEqual([
+    expect(entryToCells(sample[5], cols)).toEqual([
+      '13:55:50.884', 'ERROR', 'com.example.adapter.processors.ErrorProcessor', 'Connection failure [errorCode=E-1002]: HTTP operation failed with statusCode: 500',
+    ]);
+    expect(entryToCells(sample[5], { ...cols, logger: false, thread: true, source: 'pod-a' })).toEqual([
       '13:55:50.884', 'ERROR', 'pod-a', 'Camel (camel-1) thread #3 - Multicast', 'Connection failure [errorCode=E-1002]: HTTP operation failed with statusCode: 500',
     ]);
-    expect(entryToRow(sample[7], cols).split('\t').slice(1, 3)).toEqual(['', '']); // plain line: no level, no logger
+    expect(entryToCells(sample[7], cols).slice(1, 3)).toEqual(['', '']); // plain line: no level, no logger
+    const lines = alignRows([entryToCells(sample[5], cols), entryToCells(sample[6], cols)]).split('\n');
+    expect(lines[0].indexOf('Connection failure')).toBe(lines[1].indexOf(sample[6].message.split('\n')[0]));
   });
 
   it('computes context windows', () => {

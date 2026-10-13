@@ -158,14 +158,24 @@ describe('copy', () => {
     expect(text).toContain('201 Created ORD-10042');
   });
 
-  it('selecting rows copies tab-separated lines with full values', async () => {
+  it('selecting rows copies them with full values and the columns lined up, plus a table for spreadsheets', async () => {
     await search(page, 'ORD-10024');
     const text = await selectRowsAndCopy(page, 'Order created', '201 Created');
     const lines = text.split('\n');
     expect(lines).toHaveLength(3);
-    expect(lines.every((l) => l.split('\t').length === 4)).toBe(true);
-    expect(lines[1].split('\t')).toEqual(['09:00:07.260', 'ERROR', 'com.example.orders.service.CheckoutService', 'Checkout failed for ORD-10024: payment declined']);
+    expect(text).not.toContain('\t');
+    expect(lines[1].split(/ {2,}/)).toEqual(['09:00:07.260', 'ERROR', 'com.example.orders.service.CheckoutService', 'Checkout failed for ORD-10024: payment declined']);
+    // every message starts in the same column, whatever the logger's length
+    const starts = ['Order created', 'Checkout failed', '201 Created'].map((m, i) => lines[i].indexOf(m));
+    expect(new Set(starts).size).toBe(1);
     expect(text).not.toContain('EXC');
+    const html = await page.evaluate(async () => {
+      const [item] = await navigator.clipboard.read();
+      return (await item.getType('text/html')).text();
+    });
+    expect(html).toContain('<table');
+    expect(html.match(/<tr>/g)).toHaveLength(3);
+    expect(html).toContain('<td style="padding:0 12px 0 0;vertical-align:top;white-space:pre">com.example.orders.service.CheckoutService</td>');
   });
 
   it('Export copies or downloads exactly what is shown', async () => {

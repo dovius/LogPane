@@ -31,7 +31,7 @@ Details: [PRIVACY.md](PRIVACY.md).
 - **Safe with untrusted logs**: log text is never treated as markup, crafted lines can't freeze or break the viewer, and control characters are shown and escaped. See [SECURITY.md](SECURITY.md#how-logpane-protects-you).
 - **Reload and live tail** for Kubernetes / OpenShift pod logs (uses `sinceTime`, pauses in background tabs).
   Some consoles answer the viewer's own requests with 401 and accept only real page loads. There, Reload reloads the tab like F5, and Tail reloads it every ≥ 10 s (shown as **Tail ↻**). Search, filters, selection and scroll position are kept across reloads.
-- **Copy / export**: an entry, its JSON, its stack trace, ±N lines of context, or everything currently shown.
+- **Copy / export**: an entry, its JSON, its stack trace, ±N lines of context, or everything currently shown. Rows selected in the list copy with their columns lined up (and as a table when pasted into a spreadsheet).
 - **Display options** (View menu): UTC or local time, text size, logger and thread columns. Dark and light themes follow the system.
 - **Keyboard**:
 
