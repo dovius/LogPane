@@ -44,7 +44,7 @@ describe('hostile and unusual content', () => {
     await search(page, '');
     const result = await page.evaluate(() => ({
       pwned: (window as unknown as { __pwned?: number }).__pwned ?? null,
-      injected: document.querySelectorAll('#lv-root img, #lv-root svg, #lv-root script, #lv-root [onerror], #lv-root [onload], #lv-root [onmouseover]').length,
+      injected: document.querySelectorAll('#lv-root img, #lv-root svg:not(.lv-icon), #lv-root script, #lv-root [onerror], #lv-root [onload], #lv-root [onmouseover]').length,
       polluted: ({} as Record<string, unknown>).polluted ?? null,
     }));
     expect(result).toEqual({ pwned: null, injected: 0, polluted: null });

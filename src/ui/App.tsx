@@ -15,6 +15,7 @@ import { saveSettings, type Settings } from './settings';
 import { isRejected, type LogStore } from './store';
 import { RELOAD_TAIL_MIN_SECONDS, type ViewState } from './viewState';
 import { FilterBar, Header, NoMatches } from './Toolbar';
+import { Icon } from './icons';
 import { ErrorBoundary } from './widgets';
 
 /** Suggestion shown after a manual open on a Raw log page: open these automatically from now on. */
@@ -614,7 +615,7 @@ export function App(props: AppProps) {
                     <span class="lv-details-title">This entry can't be displayed</span>
                     <span class="lv-grow" />
                     <button type="button" class="lv-btn lv-btn-icon" onClick={() => setSelected(null)} title="Close (Esc)" aria-label="Close">
-                      ✕
+                      <Icon name="close" />
                     </button>
                   </div>
                 </header>

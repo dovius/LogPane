@@ -34,7 +34,7 @@ afterAll(async () => {
 
 const tail = (page: Page) => page.locator('.lv-header-right .lv-select select');
 const reloadAndWait = async (page: Page) => {
-  await Promise.all([page.waitForEvent('load', { timeout: 15000 }), page.click('button:text("⟳ Reload")')]);
+  await Promise.all([page.waitForEvent('load', { timeout: 15000 }), page.click('button[aria-label="Reload"]')]);
   await page.waitForSelector('#lv-root .lv-list .lv-row', { timeout: 15000 });
 };
 
@@ -58,7 +58,7 @@ describe('local file (file://)', () => {
   it('Tail reloads the page (Tail ↻) and shows lines appended to the file', async () => {
     const page = await h.openManual(`file://${file}`);
     const total = await waitReady(page);
-    expect(await page.textContent('.lv-header-right .lv-select')).toContain('↻');
+    expect(await page.$('.lv-header-right .lv-select .lv-tail-reload')).not.toBeNull(); // "Tail ↻"
     await tail(page).selectOption('2');
     appendFileSync(file, `${line('appended while tailing')}\n`);
     await page.waitForEvent('load', { timeout: 20000 });
@@ -97,7 +97,7 @@ describe('console that fails the request (network / CORS error)', () => {
     const page = await h.openManual(network.url('orders'));
     const total = await waitReady(page);
     await tail(page).selectOption('2');
-    await page.waitForFunction(() => document.querySelector('.lv-header-right .lv-select')?.textContent?.includes('↻'), null, { timeout: 8000 });
+    await page.waitForFunction(() => Boolean(document.querySelector('.lv-header-right .lv-select .lv-tail-reload')), null, { timeout: 8000 });
     expect(await page.$('.lv-src-chip.lv-err')).toBeNull();
     network.append('orders', [line('tailed over a failing network')]);
     await page.waitForEvent('load', { timeout: 20000 });

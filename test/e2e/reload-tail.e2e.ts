@@ -33,7 +33,7 @@ describe('console that accepts the viewer requests', () => {
     await page.evaluate(() => ((window as unknown as { __marker: number }).__marker = 1));
     await search(page, '"Order created"');
     normal.append('orders', [newLine('Order created: reload-1')]);
-    await page.click('button:text("⟳ Reload")');
+    await page.click('button[aria-label="Reload"]');
     await waitCounts(page, 31, orders.total + 1);
     expect(await marker(page)).toBe(1);
     expect(await page.textContent('.lv-toast')).toBe('Reloaded');
@@ -83,7 +83,7 @@ describe('console that only accepts page loads (401 for the viewer requests)', (
     await page.click('.lv-level-chip.lv-lvl-ERROR');
     await clickRow(page, 'Checkout failed');
     strict.append('orders', [newLine('Checkout failed for ORD-10024 again', 'ERROR')]);
-    await Promise.all([page.waitForEvent('load'), page.click('button:text("⟳ Reload")')]);
+    await Promise.all([page.waitForEvent('load'), page.click('button[aria-label="Reload"]')]);
     await page.waitForSelector('#lv-root .lv-list .lv-row', { timeout: 10000 });
     await waitCounts(page, 2, total + 1);
     expect(await page.inputValue('.lv-search-input')).toBe('ORD-10024');
@@ -97,13 +97,13 @@ describe('console that only accepts page loads (401 for the viewer requests)', (
     const page = await h.openManual(strict.url('orders'));
     const total = await waitReady(page);
     await tailSelect(page).selectOption('2');
-    await page.waitForFunction(() => document.querySelector('.lv-header-right .lv-select')?.textContent?.includes('↻'), null, { timeout: 8000 });
+    await page.waitForFunction(() => Boolean(document.querySelector('.lv-header-right .lv-select .lv-tail-reload')), null, { timeout: 8000 });
     expect(await page.$('.lv-src-chip.lv-err')).toBeNull();
     strict.append('orders', [newLine('arrives by reload')]);
     await page.waitForEvent('load', { timeout: 20000 });
     await page.waitForSelector('#lv-root .lv-list .lv-row', { timeout: 10000 });
     await waitCounts(page, total + 1, total + 1);
-    expect(await page.textContent('.lv-header-right .lv-select')).toContain('↻');
+    expect(await page.$('.lv-header-right .lv-select .lv-tail-reload')).not.toBeNull(); // "Tail ↻"
     expect(await tailSelect(page).inputValue()).toBe('2');
     expect((await visibleMessages(page)).at(-1)).toBe('arrives by reload');
     await tailSelect(page).selectOption('0');
@@ -116,7 +116,7 @@ describe('console that only accepts page loads (401 for the viewer requests)', (
     await page.goto(strict.url('orders'));
     await page.waitForSelector('#lv-root .lv-list .lv-row');
     await search(page, 'payment');
-    await Promise.all([page.waitForEvent('load'), page.click('button:text("⟳ Reload")')]);
+    await Promise.all([page.waitForEvent('load'), page.click('button[aria-label="Reload"]')]);
     await page.waitForSelector('#lv-root .lv-list .lv-row', { timeout: 10000 });
     expect(await page.inputValue('.lv-search-input')).toBe('payment');
     await page.close();

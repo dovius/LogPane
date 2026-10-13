@@ -7,6 +7,7 @@ import { formatFull, type TimeMode } from '../core/time';
 import type { LogEntry, SourceInfo } from '../core/types';
 import { groupFields, layoutRows, nameColumnWidth, splitPlainStack, type FieldItem } from './fieldGroups';
 import { abbreviateLogger, breakAtDots, parseStackLine, readableTimestamp, stackParts, type StackLineKind } from './format';
+import { Icon, type IconName } from './icons';
 import { JsonView, LazyDetails } from './widgets';
 
 export type CopyWhat = 'entry' | 'json' | 'stack' | 'context';
@@ -39,10 +40,10 @@ function FieldValue({ value }: { value: unknown }) {
 
 const valueText = (v: unknown) => (typeof v === 'string' ? v : safeStringify(v));
 
-function IconButton(props: { label: string; icon: string; onClick: () => void; disabled?: boolean }) {
+function IconButton(props: { label: string; icon: IconName; onClick: () => void; disabled?: boolean }) {
   return (
     <button type="button" class="lv-icon-btn" title={props.label} aria-label={props.label} disabled={props.disabled} onClick={props.onClick}>
-      {props.icon}
+      <Icon name={props.icon} />
     </button>
   );
 }
@@ -85,8 +86,8 @@ function FieldRows(props: {
               )}
             </span>
             <span class="lv-factions">
-              {r.action === 'search' && <IconButton label={`Search for this ${it.name}`} icon="⌕" onClick={() => props.onSearch(valueText(r.value))} />}
-              <IconButton label={`Copy ${it.name}`} icon="⧉" onClick={() => props.onCopyText(valueText(r.value), r.label)} />
+              {r.action === 'search' && <IconButton label={`Search for this ${it.name}`} icon="search" onClick={() => props.onSearch(valueText(r.value))} />}
+              <IconButton label={`Copy ${it.name}`} icon="copy" onClick={() => props.onCopyText(valueText(r.value), r.label)} />
             </span>
           </div>
         );
@@ -221,14 +222,14 @@ export function DetailsPanel(props: {
           <span class="lv-grow" />
           <span class="lv-seg lv-seg-small" role="group" aria-label="Entries">
             <button type="button" title="Previous entry (k)" aria-label="Previous entry" disabled={!props.canPrev} onClick={props.onPrev}>
-              ↑
+              <Icon name="up" />
             </button>
             <button type="button" title="Next entry (j)" aria-label="Next entry" disabled={!props.canNext} onClick={props.onNext}>
-              ↓
+              <Icon name="down" />
             </button>
           </span>
           <button type="button" class="lv-btn lv-btn-icon" onClick={props.onClose} title="Close (Esc)" aria-label="Close">
-            ✕
+            <Icon name="close" />
           </button>
         </div>
         <div class="lv-dmeta">
@@ -279,7 +280,7 @@ export function DetailsPanel(props: {
               <div class="lv-json-card">
                 <div class="lv-json-card-head">
                   <span>JSON</span>
-                  <IconButton label="Copy JSON payload" icon="⧉" onClick={() => props.onCopyText(safeStringify(embedded.value, 2), 'JSON payload')} />
+                  <IconButton label="Copy JSON payload" icon="copy" onClick={() => props.onCopyText(safeStringify(embedded.value, 2), 'JSON payload')} />
                 </div>
                 <JsonView value={embedded.value} />
               </div>
@@ -335,7 +336,7 @@ export function DetailsPanel(props: {
                   <span class="lv-fsub">{readableTimestamp(formatFull(e.tsMs, e.tsNanos, 'local'))}</span>
                 </span>
                 <span class="lv-factions">
-                  <IconButton label="Copy time" icon="⧉" onClick={() => props.onCopyText(e.tsText ?? formatFull(e.tsMs, e.tsNanos, 'utc'), 'time')} />
+                  <IconButton label="Copy time" icon="copy" onClick={() => props.onCopyText(e.tsText ?? formatFull(e.tsMs, e.tsNanos, 'utc'), 'time')} />
                 </span>
               </div>
             )}
@@ -358,7 +359,7 @@ export function DetailsPanel(props: {
                   </button>
                 </span>
                 <span class="lv-factions">
-                  <IconButton label="Copy logger" icon="⧉" onClick={() => props.onCopyText(e.logger, 'logger')} />
+                  <IconButton label="Copy logger" icon="copy" onClick={() => props.onCopyText(e.logger, 'logger')} />
                 </span>
               </div>
             )}
@@ -367,7 +368,7 @@ export function DetailsPanel(props: {
                 <span class="lv-fkey">Thread</span>
                 <span class="lv-fval">{visibleControls(e.thread)}</span>
                 <span class="lv-factions">
-                  <IconButton label="Search for this thread" icon="⌕" onClick={() => props.onSearch(e.thread)} />
+                  <IconButton label="Search for this thread" icon="search" onClick={() => props.onSearch(e.thread)} />
                 </span>
               </div>
             )}

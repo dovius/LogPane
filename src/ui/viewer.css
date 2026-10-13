@@ -162,6 +162,35 @@ body.lv-standalone {
 .lv-grow {
   flex: 1;
 }
+
+/* line icons (icons.tsx): sized by the text around them */
+.lv-icon {
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lv-btn.lv-busy .lv-icon {
+  animation: lv-spin 0.9s linear infinite;
+}
+@keyframes lv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lv-btn.lv-busy .lv-icon {
+    animation: none;
+  }
+}
+.lv-tail-reload {
+  width: 1em;
+  height: 1em;
+}
 .lv-dim {
   color: var(--lv-dim);
 }
@@ -381,8 +410,10 @@ kbd {
   text-overflow: ellipsis;
 }
 .lv-chip-x {
+  display: inline-grid;
+  place-items: center;
   height: 100%;
-  padding: 0 8px;
+  padding: 0 7px;
   border: 0;
   border-left: 1px solid var(--lv-border);
   background: none;
@@ -849,13 +880,13 @@ mark.lv-hit {
   font: 12px var(--lv-mono);
   cursor: pointer;
 }
-.lv-nomatch-chip span {
+.lv-nomatch-chip .lv-icon {
   color: var(--lv-dim);
 }
 .lv-nomatch-chip:hover {
   border-color: var(--lv-error);
 }
-.lv-nomatch-chip:hover span {
+.lv-nomatch-chip:hover .lv-icon {
   color: var(--lv-error);
 }
 
@@ -1229,6 +1260,8 @@ mark.lv-hit {
   background: color-mix(in srgb, var(--lv-hover) 70%, transparent);
 }
 .lv-icon-btn {
+  display: inline-grid;
+  place-items: center;
   width: 22px;
   height: 20px;
   padding: 0;

@@ -31,7 +31,7 @@ describe('reloading into an expired session', () => {
   it('a Reload that lands on an HTML login page leaves that page alone', async () => {
     const page = await h.openManual(expiring.url('orders'));
     await waitLoaded(page, orders.total);
-    await page.click('button:text("⟳ Reload")');
+    await page.click('button[aria-label="Reload"]');
     await page.waitForURL(/\/login\?/, { timeout: 15000 });
     await page.waitForLoadState('load');
     await page.waitForTimeout(800); // the background reacts to the tab's 'complete'

@@ -6,6 +6,7 @@ import type { Level, LevelCounts } from '../core/types';
 import { MAX_FONT_SIZE, MIN_FONT_SIZE, type Settings } from './settings';
 import type { SourceState } from './store';
 import { RELOAD_TAIL_MIN_SECONDS, TAIL_OPTIONS } from './viewState';
+import { Icon } from './icons';
 import { Popover } from './widgets';
 
 /** Quick ranges of the Time filter, counted back from the newest entry (logs are often hours old). */
@@ -49,7 +50,7 @@ export function Header(props: {
               </button>
               {(multi || props.mode === 'standalone') && (
                 <button type="button" class="lv-chip-x" title="Remove this source" aria-label="Remove source" onClick={() => props.onRemoveSource(src.info.id)}>
-                  ✕
+                  <Icon name="close" />
                 </button>
               )}
             </span>
@@ -63,8 +64,15 @@ export function Header(props: {
       <div class="lv-header-right">
         {props.canRefetch && (
           <>
-            <button type="button" class="lv-btn" disabled={props.busy} onClick={(e) => e.isTrusted && props.onReload()} title="Fetch the log again (filters are kept)">
-              ⟳ <span class="lv-btn-text">Reload</span>
+            <button
+              type="button"
+              class={`lv-btn${props.busy ? ' lv-busy' : ''}`}
+              disabled={props.busy}
+              onClick={(e) => e.isTrusted && props.onReload()}
+              title="Fetch the log again (filters are kept)"
+              aria-label="Reload"
+            >
+              <Icon name="reload" /> <span class="lv-btn-text">Reload</span>
             </button>
             <label
               class={`lv-select${props.tailSeconds ? ' lv-on' : ''}`}
@@ -74,7 +82,7 @@ export function Header(props: {
                   : 'Poll for new lines (paused while the tab is hidden)'
               }
             >
-              {props.tailByReload ? 'Tail ↻' : 'Tail'}
+              Tail{props.tailByReload && <Icon name="reload" class="lv-tail-reload" />}
               <select value={props.tailSeconds} onChange={(e) => props.onTail(Number((e.currentTarget as HTMLSelectElement).value))}>
                 {TAIL_OPTIONS.map((sec) => (
                   <option value={sec}>{sec ? `${sec}s` : 'off'}</option>
@@ -391,7 +399,7 @@ export function FilterBar(props: {
         <span class="lv-chip lv-trace-chip" title={`traceId ${f.traceId}`}>
           trace {f.traceId.slice(0, 10)}…
           <button type="button" class="lv-chip-x" aria-label="Clear trace filter" onClick={() => props.onFilter({ traceId: '' })}>
-            ✕
+            <Icon name="close" />
           </button>
         </span>
       )}
@@ -404,9 +412,13 @@ export function FilterBar(props: {
       <span class="lv-grow" />
 
       <div class="lv-seg" role="group" aria-label="Jump">
-        <button type="button" title="Previous error (N)" onClick={() => props.onJump('error', -1)}>◀</button>
+        <button type="button" title="Previous error (N)" aria-label="Previous error" onClick={() => props.onJump('error', -1)}>
+          <Icon name="left" />
+        </button>
         <span class="lv-seg-label lv-lvl-ERROR">ERROR</span>
-        <button type="button" title="Next error (n)" onClick={() => props.onJump('error', 1)}>▶</button>
+        <button type="button" title="Next error (n)" aria-label="Next error" onClick={() => props.onJump('error', 1)}>
+          <Icon name="right" />
+        </button>
       </div>
       <span class="lv-count" title="Entries shown / total">
         {props.shown.toLocaleString()} / {props.total.toLocaleString()}
@@ -451,7 +463,7 @@ export function NoMatches(props: {
         <div class="lv-nomatch-chips">
           {chips.map(([label, remove]) => (
             <button type="button" class="lv-nomatch-chip" title="Remove this filter" onClick={remove}>
-              {label} <span aria-hidden="true">✕</span>
+              {label} <Icon name="close" />
             </button>
           ))}
         </div>
