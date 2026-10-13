@@ -91,6 +91,7 @@ The Chrome Web Store only looks at the manifest version, which must increase wit
 ## Development
 
 ```sh
+npm run preview                # build, then open LogPane with demo logs in a separate Chromium window
 npm run watch                  # rebuild on change
 npm test                       # unit + edge-case tests (vitest)
 npm run test:e2e               # end-to-end tests in a real Chromium with the extension loaded

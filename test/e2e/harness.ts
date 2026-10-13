@@ -1,8 +1,10 @@
 // End-to-end harness: a real Chromium with the built extension loaded, plus helpers for the viewer UI.
-import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { chromium, type BrowserContext, type Page, type Worker } from 'playwright-core';
+// @ts-expect-error: plain JS module without types
+import { findChrome } from '../../scripts/chrome.mjs';
 // @ts-expect-error: plain JS module without types
 import { startDevServer } from '../../scripts/dev-server.mjs';
 
@@ -25,32 +27,6 @@ export function serve(options: {
   routes?: Record<string, { status?: number; headers?: Record<string, string>; body?: string }>;
 }): Promise<DevServer> {
   return startDevServer(options);
-}
-
-/** Chrome for Testing / Chromium: LOGPANE_CHROME, or the newest one in the Playwright browser cache. */
-export function findChrome(): string {
-  if (process.env.LOGPANE_CHROME) return process.env.LOGPANE_CHROME;
-  const caches = [join(homedir(), 'Library/Caches/ms-playwright'), join(homedir(), '.cache/ms-playwright'), join(homedir(), 'AppData/Local/ms-playwright')];
-  const candidates: [number, string][] = [];
-  for (const cache of caches.filter(existsSync)) {
-    for (const dir of readdirSync(cache)) {
-      const m = /^chromium-(\d+)$/.exec(dir);
-      if (!m) continue;
-      for (const exe of [
-        'chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-        'chrome-mac/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing',
-        'chrome-mac/Chromium.app/Contents/MacOS/Chromium',
-        'chrome-linux/chrome',
-        'chrome-win/chrome.exe',
-      ]) {
-        const p = join(cache, dir, exe);
-        if (existsSync(p)) candidates.push([Number(m[1]), p]);
-      }
-    }
-  }
-  candidates.sort((a, b) => b[0] - a[0]);
-  if (!candidates.length) throw new Error('No Chromium found. Run `npx playwright-core install chromium` or set LOGPANE_CHROME.');
-  return candidates[0][1];
 }
 
 export interface Harness {
