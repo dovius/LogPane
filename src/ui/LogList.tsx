@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { mayContainJson } from '../core/embedded';
 import { entryToRow } from '../core/exportText';
 import { highlightPieces } from '../core/filter';
+import { escapeControls, visibleControls } from '../core/safeText';
 import { formatTime, type TimeMode } from '../core/time';
 import type { LogEntry, SourceInfo } from '../core/types';
 import { abbreviateLogger, listText } from './format';
@@ -63,6 +64,7 @@ export function LogList(props: {
   onSelect: (e: LogEntry | null) => void;
   rowHeight: number;
   highlight: RegExp | null;
+  highlightMax?: number;
   timeMode: TimeMode;
   withDate: boolean;
   cols: Columns;
@@ -116,7 +118,7 @@ export function LogList(props: {
         const e = entries[indices[pos]];
         lines.push(entryToRow(e, { timeMode, withDate, logger: cols.logger, thread: cols.thread, source: cols.source ? sources.get(e.sourceId)?.label ?? '' : undefined }));
       }
-      ev.clipboardData?.setData('text/plain', lines.join('\n'));
+      ev.clipboardData?.setData('text/plain', escapeControls(lines.join('\n')));
       ev.preventDefault();
     };
     document.addEventListener('copy', onCopy);
@@ -178,6 +180,7 @@ export function LogList(props: {
         flash={e === props.flash}
         onSelect={props.onSelect}
         highlight={props.highlight}
+        highlightMax={props.highlightMax}
         timeMode={props.timeMode}
         withDate={props.withDate}
         cols={props.cols}
@@ -202,6 +205,7 @@ function Row(props: {
   flash: boolean;
   onSelect: (e: LogEntry | null) => void;
   highlight: RegExp | null;
+  highlightMax?: number;
   timeMode: TimeMode;
   withDate: boolean;
   cols: Columns;
@@ -233,18 +237,18 @@ function Row(props: {
       )}
       {cols.logger && (
         <span class="lv-c-logger" title={e.logger}>
-          {abbreviateLogger(e.logger)}
+          {visibleControls(abbreviateLogger(e.logger))}
         </span>
       )}
       {cols.thread && (
         <span class="lv-c-thread" title={e.thread}>
-          {e.thread}
+          {visibleControls(e.thread)}
         </span>
       )}
       <span class="lv-c-msg">
         {hasError && <span class="lv-badge lv-badge-exc" title="Has stack trace">EXC</span>}
         {e.json && mayContainJson(e.message) && <span class="lv-badge" title="Message contains JSON">{'{}'}</span>}
-        <Pieces pieces={highlightPieces(listText(e.message), props.highlight, 20)} />
+        <Pieces pieces={highlightPieces(listText(e.message), props.highlight, props.highlightMax ?? 20)} />
       </span>
     </div>
   );

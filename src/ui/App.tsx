@@ -2,6 +2,7 @@ import { render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { contextRange, entriesToNdjson, entriesToText, entryToText, stackTraceOf } from '../core/exportText';
 import { EMPTY_FILTER, applyFilter, isFilterActive, type FilterState } from '../core/filter';
+import { TOO_DEEP, safeStringify } from '../core/safeText';
 import { labelForFileName, labelForUrl, toRawLogUrl } from '../core/sources';
 import { dayKey } from '../core/time';
 import { LEVELS, type Level, type LogEntry } from '../core/types';
@@ -14,6 +15,7 @@ import { saveSettings, type Settings } from './settings';
 import { isRejected, type LogStore } from './store';
 import { RELOAD_TAIL_MIN_SECONDS, type ViewState } from './viewState';
 import { FilterBar, Header, NoMatches } from './Toolbar';
+import { ErrorBoundary } from './widgets';
 
 /** Suggestion shown after a manual open on a Raw log page: open these automatically from now on. */
 export interface AutoPrompt {
@@ -275,8 +277,11 @@ export function App(props: AppProps) {
     if (!e) return;
     const label = multiSource ? sources.get(e.sourceId)?.label : undefined;
     if (what === 'entry') void copy(entryToText(e, settings.timeMode, label), 'entry');
-    else if (what === 'json') void copy(e.json ? JSON.stringify(e.json, null, 2) : e.raw, e.json ? 'JSON' : 'raw line');
-    else if (what === 'stack') void copy(stackTraceOf(e), 'stack trace');
+    else if (what === 'json') {
+      // too deeply nested to pretty-print: the line as it came
+      const pretty = e.json ? safeStringify(e.json, 2) : TOO_DEEP;
+      void copy(pretty === TOO_DEEP ? e.raw : pretty, e.json ? 'JSON' : 'raw line');
+    } else if (what === 'stack') void copy(stackTraceOf(e), 'stack trace');
     else {
       const [a, b] = contextRange(entries.length, entries.indexOf(e), settings.contextLines);
       void copy(entriesToText(entries.slice(a, b), settings.timeMode, labels()), pluralize(b - a, 'entry', 'entries'));
@@ -307,8 +312,8 @@ export function App(props: AppProps) {
     if (selected) scrollTo(selected, 'center');
   };
 
-  const addFiles = async (files: File[]) => {
-    for (const file of files) void store.addText({ label: labelForFileName(file.name), kind: 'file' }, await file.text());
+  const addFiles = (files: File[]) => {
+    for (const file of files) void store.addFile({ label: labelForFileName(file.name), kind: 'file' }, file);
   };
   const addUrls = (urls: string[]) => {
     const origin = props.baseUrl ? new URL(props.baseUrl).origin : undefined;
@@ -477,7 +482,7 @@ export function App(props: AppProps) {
         if (!hasFiles(e) || adding) return;
         e.preventDefault();
         setDragging(false);
-        void addFiles(Array.from(e.dataTransfer?.files ?? []));
+        addFiles(Array.from(e.dataTransfer?.files ?? []));
       }}
     >
       {store.sources.length > 0 && (
@@ -556,7 +561,7 @@ export function App(props: AppProps) {
       <div class={`lv-main${selected ? ' lv-with-details' : ''}`}>
         <div class="lv-list-wrap">
           {store.sources.length === 0 ? (
-            <EmptyState onFiles={(f) => void addFiles(f)} onPaste={addPaste} />
+            <EmptyState onFiles={(f) => addFiles(f)} onPaste={addPaste} />
           ) : (
             <>
               <ColumnHeader cols={cols} timeMode={settings.timeMode} />
@@ -568,6 +573,7 @@ export function App(props: AppProps) {
                 onSelect={setSelected}
                 rowHeight={rowHeight}
                 highlight={result.highlight}
+                highlightMax={result.highlightMax}
                 timeMode={settings.timeMode}
                 withDate={withDate}
                 cols={cols}
@@ -595,36 +601,59 @@ export function App(props: AppProps) {
           )}
         </div>
         {selected && (
-          <DetailsPanel
-            entry={selected}
-            source={sources.get(selected.sourceId)}
-            timeMode={settings.timeMode}
-            contextLines={settings.contextLines}
-            canPrev={selectedPos > 0}
-            canNext={selectedPos >= 0 && selectedPos < indices.length - 1}
-            onPrev={() => move(-1)}
-            onNext={() => move(1)}
-            onCopyText={(text, what) => void copy(text, what)}
-            onResizeStart={onResizeStart}
-            onClose={() => setSelected(null)}
-            onFilterTrace={(traceId) => {
-              patchFilter({ traceId });
-              scrollTo(selected, 'center');
-            }}
-            onFilterLogger={(logger) => {
-              patchFilter({ loggers: [logger] });
-              scrollTo(selected, 'center');
-            }}
-            onSearch={(term) => setQuery(`"${term}"`)}
-            onShowInContext={() => showInContext(selected)}
-            onCopy={(what) => onCopy(what)}
-          />
+          <ErrorBoundary
+            resetKey={selected}
+            fallback={(err) => (
+              <aside class="lv-details lv-details-broken" aria-label="Entry details">
+                <header class="lv-dhead">
+                  <div class="lv-dhead-row">
+                    <span class="lv-details-title">This entry can't be displayed</span>
+                    <span class="lv-grow" />
+                    <button type="button" class="lv-btn lv-btn-icon" onClick={() => setSelected(null)} title="Close (Esc)" aria-label="Close">
+                      ✕
+                    </button>
+                  </div>
+                </header>
+                <div class="lv-details-body">
+                  <p class="lv-dim">{err.message}</p>
+                  <button type="button" class="lv-btn lv-btn-small" onClick={() => void copy(selected.raw, 'raw line')}>
+                    Copy raw line
+                  </button>
+                </div>
+              </aside>
+            )}
+          >
+            <DetailsPanel
+              entry={selected}
+              source={sources.get(selected.sourceId)}
+              timeMode={settings.timeMode}
+              contextLines={settings.contextLines}
+              canPrev={selectedPos > 0}
+              canNext={selectedPos >= 0 && selectedPos < indices.length - 1}
+              onPrev={() => move(-1)}
+              onNext={() => move(1)}
+              onCopyText={(text, what) => void copy(text, what)}
+              onResizeStart={onResizeStart}
+              onClose={() => setSelected(null)}
+              onFilterTrace={(traceId) => {
+                patchFilter({ traceId });
+                scrollTo(selected, 'center');
+              }}
+              onFilterLogger={(logger) => {
+                patchFilter({ loggers: [logger] });
+                scrollTo(selected, 'center');
+              }}
+              onSearch={(term) => setQuery(`"${term}"`)}
+              onShowInContext={() => showInContext(selected)}
+              onCopy={(what) => onCopy(what)}
+            />
+          </ErrorBoundary>
         )}
       </div>
       {adding && (
         <AddSourceDialog
           canFetchUrls={props.canFetchUrls}
-          onFiles={(f) => void addFiles(f)}
+          onFiles={(f) => addFiles(f)}
           onUrls={addUrls}
           onPaste={addPaste}
           onClose={() => setAdding(false)}
@@ -695,5 +724,22 @@ function EmptyState(props: { onFiles: (files: File[]) => void; onPaste: (text: s
 }
 
 export function mountApp(container: HTMLElement, props: AppProps): void {
-  render(<App {...props} />, container);
+  render(
+    <ErrorBoundary
+      fallback={(err) => (
+        <div class="lv-empty lv-crash" role="alert">
+          <h1>LogPane ran into a problem</h1>
+          <p class="lv-dim">{err.message}</p>
+          {props.onShowRaw && (
+            <button type="button" class="lv-btn lv-primary" onClick={props.onShowRaw}>
+              Show the raw text
+            </button>
+          )}
+        </div>
+      )}
+    >
+      <App {...props} />
+    </ErrorBoundary>,
+    container,
+  );
 }

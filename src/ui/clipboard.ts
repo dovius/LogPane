@@ -1,4 +1,9 @@
-export async function copyText(text: string): Promise<boolean> {
+import { escapeControls } from '../core/safeText';
+
+// Everything LogPane puts on the clipboard or into a download has control characters escaped (see escapeControls).
+
+export async function copyText(raw: string): Promise<boolean> {
+  const text = escapeControls(raw);
   try {
     await navigator.clipboard.writeText(text);
     return true;
@@ -21,7 +26,7 @@ export async function copyText(text: string): Promise<boolean> {
 }
 
 export function downloadText(text: string, fileName: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  const url = URL.createObjectURL(new Blob([escapeControls(text)], { type: 'text/plain;charset=utf-8' }));
   const a = document.createElement('a');
   a.href = url;
   a.download = fileName;

@@ -1,4 +1,5 @@
 import { FIELD_ALIASES } from '../core/fields';
+import { safeStringify } from '../core/safeText';
 import type { JsonObject, LogEntry } from '../core/types';
 
 export type FieldAction = 'trace' | 'search';
@@ -100,7 +101,7 @@ export function groupFields(e: LogEntry): FieldGroups {
   // The same id can be both in MDC and at the top level: show it once.
   const seen = new Set<string>();
   groups.trace = groups.trace.filter((r) => {
-    const id = `${r.label.replace(/^mdc\./, '').replace(/[_.]/g, '').toLowerCase()}=${String(r.value)}`;
+    const id = `${r.label.replace(/^mdc\./, '').replace(/[_.]/g, '').toLowerCase()}=${safeStringify(r.value)}`;
     if (seen.has(id)) return false;
     seen.add(id);
     return true;
@@ -109,11 +110,14 @@ export function groupFields(e: LogEntry): FieldGroups {
 }
 
 /** Splits a folded plain-text entry into its first line and the stack trace below it, if it has one. */
+// One line at a time and without `m` / `\s`: those make ^ match after every U+2028 of a crafted line (quadratic).
+const STACK_LINE_RE = /^[ \t]*at |^Caused by:|^[\w$.]+(?:Exception|Error|Throwable)\b|^[ \t]*\.\.\. \d+/;
+
 export function splitPlainStack(raw: string): { message: string; stack: string } | null {
   const nl = raw.indexOf('\n');
   if (nl < 0) return null;
   const rest = raw.slice(nl + 1);
-  if (!/^\s*at |^Caused by:|^[\w$.]+(?:Exception|Error|Throwable)\b|^\s*\.\.\. \d+/m.test(rest)) return null;
+  if (!rest.split('\n').some((line) => STACK_LINE_RE.test(line))) return null;
   return { message: raw.slice(0, nl), stack: rest };
 }
 

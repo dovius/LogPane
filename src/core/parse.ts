@@ -1,3 +1,4 @@
+import { safeStringify } from './safeText';
 import { exceptionChain } from './stacktrace';
 import {
   BOILERPLATE_KEYS, FIELD_ALIASES, collectValues, detectPlainLevel, isGelf, normalizeLevel, pick, pickString, syslogLevel,
@@ -10,6 +11,10 @@ const INDEXED_KEYS = new Set<string>([
   ...BOILERPLATE_KEYS, ...FIELD_ALIASES.message, ...FIELD_ALIASES.logger, ...FIELD_ALIASES.thread,
   ...FIELD_ALIASES.stackText, 'mdc', 'exception',
 ]);
+
+/** Limits of one folded plain-text entry (stack traces are far shorter); past them a new entry starts. */
+export const MAX_FOLDED_LINES = 5000;
+export const MAX_FOLDED_CHARS = 1_000_000;
 
 const CONTINUATION_RE = /^(?:\s+\S|Caused by:|Suppressed:|\.\.\. \d+ (?:more|common frames omitted)|at [\w$.<>]+\()/;
 /**
@@ -24,14 +29,6 @@ export function splitLines(text: string): string[] {
   const lines = text.split(/\r\n|\n|\r/);
   if (lines.length && lines[lines.length - 1] === '') lines.pop();
   return lines;
-}
-
-function safeStringify(v: unknown): string {
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return String(v);
-  }
 }
 
 function asObject(v: unknown): JsonObject | undefined {
@@ -79,6 +76,8 @@ export class LogParser {
   private lastTs = { ms: Number.NaN, nanos: 0, text: undefined as string | undefined };
   /** Entries before the first timestamp of the source (banners); they get that first timestamp. */
   private untimed: LogEntry[] | null = [];
+  /** Continuation lines folded into `last` so far. */
+  private folded = 0;
 
   constructor(readonly sourceId: number) {}
 
@@ -88,10 +87,12 @@ export class LogParser {
     for (const line of lines) {
       const lineNo = ++this.lineCount;
       if (line.trim() === '') continue;
-      if (this.last && !this.last.json && !line.trimStart().startsWith('{') && (CONTINUATION_RE.test(line) || EXCEPTION_HEADER_RE.test(line))) {
+      if (this.last && !this.last.json && this.canFold(this.last, line) && !line.trimStart().startsWith('{') && (CONTINUATION_RE.test(line) || EXCEPTION_HEADER_RE.test(line))) {
         this.extend(this.last, line);
+        this.folded++;
         continue;
       }
+      this.folded = 0;
       const entry = this.parseLine(line, lineNo);
       if (!Number.isNaN(entry.tsMs) && !entry.tsInherited) {
         this.lastTs = { ms: entry.tsMs, nanos: entry.tsNanos, text: entry.tsText };
@@ -110,6 +111,11 @@ export class LogParser {
       out.push(entry);
     }
     return out;
+  }
+
+  /** An indented file (pretty JSON, YAML) would otherwise become one entry the size of the file. */
+  private canFold(entry: LogEntry, line: string): boolean {
+    return this.folded < MAX_FOLDED_LINES && entry.raw.length + line.length < MAX_FOLDED_CHARS;
   }
 
   private extend(entry: LogEntry, line: string): void {

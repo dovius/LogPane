@@ -9,9 +9,18 @@ let srv: DevServer;
 const orders = ordersService(40);
 const edge = Object.values(EDGE_LINES);
 
+/** Lines built to freeze or crash a naive viewer when the entry is opened. */
+const CRAFTED = [
+  `{"timestamp":"2026-10-01T09:00:00Z","level":"INFO","message":"DEEP FIELD","data":${'['.repeat(20_000)}1${']'.repeat(20_000)}}`,
+  JSON.stringify({ timestamp: '2026-10-01T09:00:01Z', level: 'ERROR', message: 'SPACE FRAME', stack_trace: `x.Boom: b\n\tat ${' '.repeat(200_000)}x\n\tat a.B.c(B.java:1)` }),
+  `2026-10-01 09:00:02 ERROR SEPARATORS\n ${'\u2028'.repeat(200_000)}q`,
+  JSON.stringify({ timestamp: '2026-10-01T09:00:03Z', level: 'WARN', message: 'BIDI invoice\u202Efdp.exe \u001b[31mred\u001b[0m', user: 'eve\u2066x\u2069' }),
+  JSON.stringify({ timestamp: '2026-10-01T09:00:04Z', level: 'INFO', message: 'MANY FIELDS', ...Object.fromEntries(Array.from({ length: 5000 }, (_, i) => [`f${i}`, i])) }),
+];
+
 beforeAll(async () => {
   h = await launch();
-  srv = await serve({ logs: { edge: edge.join('\n'), orders: orders.text } });
+  srv = await serve({ logs: { edge: edge.join('\n'), orders: orders.text, crafted: CRAFTED.join('\n') } });
 });
 afterAll(async () => {
   await h?.close();
@@ -30,7 +39,7 @@ describe('hostile and unusual content', () => {
     for (const text of ['img src=x', 'keys', 'proto']) {
       await search(page, text);
       await clickRow(page, text === 'img src=x' ? 'onerror' : text);
-      await page.click('.lv-details summary');
+      await page.click('.lv-details summary:has-text("Raw")');
     }
     await search(page, '');
     const result = await page.evaluate(() => ({
@@ -62,6 +71,40 @@ describe('hostile and unusual content', () => {
     await clickRow(page, 'LONG');
     const full = await page.$eval('.lv-details section .lv-pre', (el) => el.textContent?.length ?? 0);
     expect(full).toBeGreaterThan(200_000);
+    await page.close();
+  });
+
+  it('crafted entries open quickly and completely, without errors', async () => {
+    const page = await h.openManual(srv.url('crafted'));
+    await waitLoaded(page, CRAFTED.length);
+    for (const marker of ['DEEP FIELD', 'SPACE FRAME', 'SEPARATORS', 'BIDI', 'MANY FIELDS']) {
+      const t0 = Date.now();
+      await clickRow(page, marker);
+      await page.waitForSelector('.lv-details-body');
+      expect(Date.now() - t0, marker).toBeLessThan(3000);
+      expect(await page.$('.lv-details-broken'), marker).toBeNull();
+      await page.click('.lv-details summary:has-text("Raw")');
+      expect((await page.textContent('.lv-details details[open] .lv-pre'))?.length, marker).toBeGreaterThan(0);
+    }
+    // the deep one: shown as its raw line, the stack frame of spaces as text
+    await clickRow(page, 'DEEP FIELD');
+    await page.click('.lv-details summary:has-text("Raw")');
+    expect(await page.textContent('.lv-details details[open] .lv-pre')).toContain('"message":"DEEP FIELD"');
+    await clickRow(page, 'SPACE FRAME');
+    expect(await page.textContent('.lv-stack')).toContain('Show 2 more lines'); // the 200 000-char frame is past the limit
+    await page.click('.lv-stack .lv-show-all');
+    expect(await page.textContent('.lv-stack')).toContain('at a.B.c(B.java:1)');
+    // hidden reordering and colour codes are made visible / dropped
+    await clickRow(page, 'BIDI');
+    const msg = (await page.textContent('.lv-details .lv-msg')) ?? '';
+    expect(msg).toBe('BIDI invoice⟨U+202E⟩fdp.exe red');
+    expect(await page.textContent('.lv-details-body')).toContain('eve⟨U+2066⟩x⟨U+2069⟩');
+    expect((await visibleMessages(page)).find((m) => m.startsWith('BIDI'))).toBe('BIDI invoice⟨U+202E⟩fdp.exe red');
+    // thousands of fields: the first ones, and the rest on request
+    await clickRow(page, 'MANY FIELDS');
+    expect(await page.$$eval('.lv-frows .lv-frow', (els) => els.length)).toBeLessThan(400);
+    await page.click('.lv-show-all:has-text("more fields")');
+    expect(await page.$$eval('.lv-frows .lv-frow', (els) => els.length)).toBeGreaterThan(5000);
     await page.close();
   });
 

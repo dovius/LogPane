@@ -64,6 +64,67 @@ export function regexSubjectLimit(source: string): number {
 /** A regex filter that takes longer than this over all entries is stopped with an error. */
 export const REGEX_BUDGET_MS = 1000;
 export const REGEX_TOO_SLOW = 'This regular expression is too slow on these logs. Make it more specific (avoid patterns like .*.*).';
+export const REGEX_NESTED =
+  'This regular expression repeats a group that itself repeats or has alternatives, like (a+)+ or (a|ab)*. That can freeze the tab on some lines; write it without the outer repetition (e.g. a+).';
+
+const QUANTIFIER_RE = /^(?:[*+]|\{\d*,\d*\}|\{\d+\})/;
+
+/** `*`, `+`, `{n,}` and `{n,m}` with more than one repetition (`?`, `{1}` don't repeat). */
+function repeats(q: string): boolean {
+  if (q === '*' || q === '+') return true;
+  const m = /^\{(\d*)(,?)(\d*)\}$/.exec(q);
+  if (!m) return false;
+  if (!m[2]) return Number(m[1]) > 1;
+  return m[3] === '' || Number(m[3]) > 1;
+}
+
+/**
+ * Detects the patterns behind exponential backtracking (JavaScript can't interrupt a running regex): a group
+ * repeated without bound whose body repeats or alternates, at any depth, e.g. `(a+)+`, `(\w|\d)*$`, `((ab)+c)*`.
+ * Other patterns stay polynomial, which the subject limit and the time budget keep in check.
+ */
+export function nestedRepetition(source: string): boolean {
+  // one frame per open group: does its body contain a quantifier or an alternation?
+  const stack: { risky: boolean }[] = [{ risky: false }];
+  for (let i = 0; i < source.length; i++) {
+    const c = source[i];
+    if (c === '\\') {
+      i++;
+      continue;
+    }
+    if (c === '[') {
+      // character class: skip to the closing bracket (a leading ] or ^] is literal)
+      i++;
+      if (source[i] === '^') i++;
+      if (source[i] === ']') i++;
+      while (i < source.length && source[i] !== ']') i += source[i] === '\\' ? 2 : 1;
+      continue;
+    }
+    if (c === '(') {
+      stack.push({ risky: false });
+      continue;
+    }
+    if (c === '|') {
+      stack[stack.length - 1].risky = true;
+      continue;
+    }
+    const q = QUANTIFIER_RE.exec(source.slice(i, i + 24))?.[0];
+    if (c === ')') {
+      const group = stack.length > 1 ? stack.pop()! : { risky: false };
+      const after = QUANTIFIER_RE.exec(source.slice(i + 1, i + 25))?.[0];
+      // only an unbounded outer repetition is exponential: (\d+\.){3} is fine, (\d+\.)+ is not
+      if (after !== undefined && /^(?:[*+]|\{\d*,\})$/.test(after) && group.risky) return true;
+      if ((after !== undefined && repeats(after)) || group.risky) stack[stack.length - 1].risky = true;
+      if (after) i += after.length;
+      continue;
+    }
+    if (q) {
+      if (repeats(q)) stack[stack.length - 1].risky = true;
+      i += q.length - 1;
+    }
+  }
+  return false;
+}
 
 /**
  * `.*foo` is tried from every position of every line (quadratic); anchored at line starts it gives
@@ -81,12 +142,14 @@ export interface CompiledFilter {
   matchesLevel: (e: LogEntry) => boolean;
   /** Global regex for highlighting matches in the UI, or null. */
   highlight: RegExp | null;
+  /** At most this many highlighted matches per row (unset: the UI default). */
+  highlightMax?: number;
   error?: string;
   /** Regex search: applyFilter stops after REGEX_BUDGET_MS. */
   timed?: boolean;
 }
 
-function compileText(f: FilterState): Pick<CompiledFilter, 'highlight' | 'error' | 'timed'> & { test: ((e: LogEntry) => boolean) | null } {
+function compileText(f: FilterState): Pick<CompiledFilter, 'highlight' | 'highlightMax' | 'error' | 'timed'> & { test: ((e: LogEntry) => boolean) | null } {
   if (!f.text.trim()) return { test: null, highlight: null };
   const text = (e: LogEntry) => (f.caseSensitive ? searchText(e) : e.haystack);
   if (f.regex) {
@@ -96,13 +159,16 @@ function compileText(f: FilterState): Pick<CompiledFilter, 'highlight' | 'error'
     } catch (err) {
       return { test: () => false, highlight: null, error: (err as Error).message };
     }
+    if (nestedRepetition(f.text)) return { test: () => false, highlight: null, error: REGEX_NESTED };
     const fast = fastRegex(f.text, re.flags);
     const limit = regexSubjectLimit(f.text);
     const test = (e: LogEntry) => {
       const t = text(e);
       return fast.test(t.length > limit ? t.slice(0, limit) : t);
     };
-    return { test, highlight: new RegExp(re.source, re.flags + 'g'), timed: true };
+    // After the first match, more searches over the rest of the line can be much slower than the filter
+    // test was: patterns with several unbounded quantifiers highlight one match per row.
+    return { test, highlight: new RegExp(re.source, re.flags + 'g'), highlightMax: limit < REGEX_SUBJECT_LIMIT ? 1 : undefined, timed: true };
   }
   const q = parseQuery(f.text, f.caseSensitive);
   if (!q.include.length && !q.exclude.length) return { test: null, highlight: null };
@@ -136,6 +202,7 @@ export function compileFilter(f: FilterState): CompiledFilter {
     },
     matchesLevel: levels ? (e) => levels.has(e.level) : () => true,
     highlight: textPart.highlight,
+    highlightMax: textPart.highlightMax,
     error: textPart.error,
     timed: textPart.timed,
   };
@@ -147,6 +214,7 @@ export interface FilterResult {
   /** Per-level counts of entries that pass every filter except the level one. */
   counts: LevelCounts;
   highlight: RegExp | null;
+  highlightMax?: number;
   error?: string;
 }
 
@@ -165,7 +233,7 @@ export function applyFilter(entries: readonly LogEntry[], f: FilterState): Filte
     counts[e.level]++;
     if (c.matchesLevel(e)) indices.push(i);
   }
-  return { indices, counts, highlight: c.highlight, error: c.error };
+  return { indices, counts, highlight: c.highlight, highlightMax: c.highlightMax, error: c.error };
 }
 
 export function isFilterActive(f: FilterState): boolean {
@@ -187,7 +255,7 @@ export function highlightPieces(text: string, re: RegExp | null, maxHits = 50): 
   re.lastIndex = 0;
   let m: RegExpExecArray | null;
   let hits = 0;
-  while ((m = re.exec(text)) && hits < maxHits) {
+  while (hits < maxHits && (m = re.exec(text))) {
     if (m[0] === '') {
       re.lastIndex++;
       continue;

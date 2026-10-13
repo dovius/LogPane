@@ -1,3 +1,5 @@
+import { safeStringify } from '../core/safeText';
+
 /** `com.example.orders.processors.ErrorProcessor` → `c.e.o.p.ErrorProcessor`. */
 export function abbreviateLogger(name: string, max = 28): string {
   if (name.length <= max || !name.includes('.')) return name;
@@ -24,7 +26,11 @@ const JSON_TOKEN_RE = /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*")(\s*:)?|\b(?:true
 
 /** Pretty-prints a value and splits it into tokens for syntax colouring. */
 export function jsonTokens(value: unknown): JsonToken[] {
-  const text = JSON.stringify(value, null, 2) ?? String(value);
+  return jsonTextTokens(safeStringify(value, 2));
+}
+
+/** Tokens of (possibly cut off) pretty-printed JSON text. */
+export function jsonTextTokens(text: string): JsonToken[] {
   const out: JsonToken[] = [];
   let last = 0;
   for (const m of text.matchAll(JSON_TOKEN_RE)) {
@@ -109,6 +115,9 @@ export function breakAtDots(text: string, minToken = 20): (string | null)[] {
   return out;
 }
 
+/** Longer stack lines are shown as they are, without splitting into class, method and location. */
+export const MAX_STACK_LINE = 4000;
+
 export type StackLine =
   | { kind: 'frame'; method: string; location: string }
   | { kind: 'exception'; prefix: string; type: string; message: string }
@@ -119,8 +128,16 @@ export type StackLine =
  * `Caused by: a.b.Error: boom` → prefix `Caused by: `, type `a.b.Error`, message `boom`.
  */
 export function parseStackLine(line: string): StackLine {
-  const frame = /^\s*at (.*?)(\([^()]*\))?\s*$/.exec(line);
-  if (frame) return { kind: 'frame', method: frame[1], location: frame[2] ?? '' };
+  // Lines come from the log: no regex with backtracking over the whole line, and huge ones stay plain text.
+  if (line.length > MAX_STACK_LINE) return { kind: 'other', text: line.trim() };
+  const body = line.trimStart();
+  if (body.startsWith('at ')) {
+    const rest = body.slice(3).trimEnd();
+    const open = rest.endsWith(')') ? rest.lastIndexOf('(') : -1;
+    return open < 0 || rest.indexOf(')', open) !== rest.length - 1
+      ? { kind: 'frame', method: rest, location: '' }
+      : { kind: 'frame', method: rest.slice(0, open), location: rest.slice(open) };
+  }
   const ex = /^(\s*(?:Caused by|Suppressed|Wrapped by): )?([\w$./]+)(?:: ([\s\S]*))?$/.exec(line);
   if (ex && /\w[.$]\w|Exception|Error|Throwable/.test(ex[2])) {
     return { kind: 'exception', prefix: ex[1] ?? '', type: ex[2], message: ex[3] ?? '' };

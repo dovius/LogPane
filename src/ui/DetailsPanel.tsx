@@ -1,17 +1,19 @@
 import { useMemo, useState } from 'preact/hooks';
 import { extractEmbeddedJson } from '../core/embedded';
 import { stackTraceOf } from '../core/exportText';
+import { safeStringify, visibleControls } from '../core/safeText';
 import { exceptionChain } from '../core/stacktrace';
 import { formatFull, type TimeMode } from '../core/time';
 import type { LogEntry, SourceInfo } from '../core/types';
 import { groupFields, layoutRows, nameColumnWidth, splitPlainStack, type FieldItem } from './fieldGroups';
 import { abbreviateLogger, breakAtDots, parseStackLine, readableTimestamp, stackParts, type StackLineKind } from './format';
-import { JsonView } from './widgets';
+import { JsonView, LazyDetails } from './widgets';
 
 export type CopyWhat = 'entry' | 'json' | 'stack' | 'context';
 
+/** Log text for display: control / bidi characters made visible, long identifiers wrap at their dots. */
 function Dotted({ text, min }: { text: string; min?: number }) {
-  return <>{breakAtDots(text, min).map((p) => (p === null ? <wbr /> : p))}</>;
+  return <>{breakAtDots(visibleControls(text), min).map((p) => (p === null ? <wbr /> : p))}</>;
 }
 
 /** A field value styled by type: strings as text, numbers / booleans / null like JSON, arrays as lists. */
@@ -23,18 +25,19 @@ function FieldValue({ value }: { value: unknown }) {
   if (Array.isArray(value) && value.every((v) => v === null || typeof v !== 'object')) {
     return (
       <span class="lv-v-list">
-        {value.map((v) => (
+        {value.slice(0, LIST_LIMIT).map((v) => (
           <span class="lv-v-item">
             <FieldValue value={v} />
           </span>
         ))}
+        {value.length > LIST_LIMIT && <span class="lv-dim">… {(value.length - LIST_LIMIT).toLocaleString()} more</span>}
       </span>
     );
   }
-  return <code class="lv-v-json">{JSON.stringify(value)}</code>;
+  return <code class="lv-v-json">{safeStringify(value)}</code>;
 }
 
-const valueText = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v));
+const valueText = (v: unknown) => (typeof v === 'string' ? v : safeStringify(v));
 
 function IconButton(props: { label: string; icon: string; onClick: () => void; disabled?: boolean }) {
   return (
@@ -44,15 +47,21 @@ function IconButton(props: { label: string; icon: string; onClick: () => void; d
   );
 }
 
+/** Lists longer than this show "Show all" (an entry can carry thousands of fields). */
+const FIELD_LIMIT = 300;
+const LIST_LIMIT = 100;
+
 function FieldRows(props: {
   items: FieldItem[];
   onFilterTrace: (traceId: string) => void;
   onSearch: (term: string) => void;
   onCopyText: (text: string, what: string) => void;
 }) {
+  const [all, setAll] = useState(false);
+  const items = all ? props.items : props.items.slice(0, FIELD_LIMIT);
   return (
     <div class="lv-frows">
-      {props.items.map((it) => {
+      {items.map((it) => {
         if (it.kind === 'group') {
           return (
             <div class="lv-fgroup" key={`g:${it.path}`} title={it.path}>
@@ -69,7 +78,7 @@ function FieldRows(props: {
             <span class="lv-fval">
               {r.action === 'trace' ? (
                 <button type="button" class="lv-link" title="Show all entries of this trace" onClick={() => props.onFilterTrace(String(r.value))}>
-                  {String(r.value)}
+                  {visibleControls(String(r.value))}
                 </button>
               ) : (
                 <FieldValue value={r.value} />
@@ -82,6 +91,11 @@ function FieldRows(props: {
           </div>
         );
       })}
+      {items.length < props.items.length && (
+        <button type="button" class="lv-btn lv-btn-small lv-show-all" onClick={() => setAll(true)}>
+          Show {(props.items.length - items.length).toLocaleString()} more fields
+        </button>
+      )}
     </div>
   );
 }
@@ -94,7 +108,7 @@ function StackLineView({ text, kind }: { text: string; kind: StackLineKind }) {
         <span class="lv-sl-at">at </span>
         <Dotted text={l.method} min={1} />
         <wbr />
-        <span class="lv-sl-loc">{l.location}</span>
+        <span class="lv-sl-loc">{visibleControls(l.location)}</span>
       </div>
     );
   }
@@ -105,19 +119,36 @@ function StackLineView({ text, kind }: { text: string; kind: StackLineKind }) {
         <span class="lv-sl-type">
           <Dotted text={l.type} min={1} />
         </span>
-        {l.message && <span class="lv-sl-msg">: {l.message}</span>}
+        {l.message && <span class="lv-sl-msg">: {visibleControls(l.message)}</span>}
       </div>
     );
   }
-  return <div class={kind === 'other' ? 'lv-sl lv-sl-more' : 'lv-sl lv-sl-cont'}>{l.text}</div>;
+  return <div class={kind === 'other' ? 'lv-sl lv-sl-more' : 'lv-sl lv-sl-cont'}>{visibleControls(l.text)}</div>;
+}
+
+/** Longer stack traces are cut until "Show all": every line is several elements. */
+const STACK_LINE_LIMIT = 2000;
+const STACK_CHAR_LIMIT = 200_000;
+
+/** The first lines of `stack` within the limits, and how many lines were left out. */
+function cutStack(stack: string): { shown: string; hidden: number } {
+  if (stack.length <= STACK_CHAR_LIMIT && stack.split('\n', STACK_LINE_LIMIT + 1).length <= STACK_LINE_LIMIT) return { shown: stack, hidden: 0 };
+  const lines = stack.split('\n');
+  let n = 0;
+  for (let chars = 0; n < lines.length && n < STACK_LINE_LIMIT && chars + lines[n].length <= STACK_CHAR_LIMIT; n++) chars += lines[n].length + 1;
+  n = Math.max(n, 1);
+  return { shown: lines.slice(0, n).join('\n'), hidden: lines.length - n };
 }
 
 function StackTrace(props: { stack: string; showAll: boolean }) {
-  const parts = useMemo(() => stackParts(props.stack), [props.stack]);
+  const [full, setFull] = useState(false);
+  const { shown, hidden } = useMemo(() => (full ? { shown: props.stack, hidden: 0 } : cutStack(props.stack)), [props.stack, full]);
+  const parts = useMemo(() => stackParts(shown), [shown]);
   const [open, setOpen] = useState<Set<number>>(new Set());
-  return (
-    <div class="lv-pre lv-stack">
-      {parts.map((p, i) =>
+  // memoised: parsing every line again on each re-render of the app (Tail, toasts) adds up
+  const lines = useMemo(
+    () =>
+      parts.map((p, i) =>
         p.kind === 'line' ? (
           <StackLineView text={p.text} kind={p.line} />
         ) : props.showAll || open.has(i) ? (
@@ -127,6 +158,16 @@ function StackTrace(props: { stack: string; showAll: boolean }) {
             ⋯ {p.lines.length} framework frames
           </button>
         ),
+      ),
+    [parts, open, props.showAll],
+  );
+  return (
+    <div class="lv-pre lv-stack">
+      {lines}
+      {hidden > 0 && (
+        <button type="button" class="lv-btn lv-btn-small lv-show-all" onClick={() => setFull(true)}>
+          Show {hidden.toLocaleString()} more lines
+        </button>
       )}
     </div>
   );
@@ -194,10 +235,10 @@ export function DetailsPanel(props: {
           <div class="lv-dmeta-in">
             {e.logger && (
               <button type="button" class="lv-dmeta-item lv-link" title={`${e.logger}\nShow only this logger`} onClick={() => props.onFilterLogger(e.logger)}>
-                {abbreviateLogger(e.logger, 40)}
+                {visibleControls(abbreviateLogger(e.logger, 40))}
               </button>
             )}
-            {e.thread && <span class="lv-dmeta-item" title="Thread">{e.thread}</span>}
+            {e.thread && <span class="lv-dmeta-item" title="Thread">{visibleControls(e.thread)}</span>}
             {props.source && (
               <span class="lv-dmeta-item" title={`${props.source.label}, line ${e.lineNo}`}>
                 <i class="lv-dot" style={{ background: props.source.color }} />
@@ -234,15 +275,15 @@ export function DetailsPanel(props: {
           </h3>
           {embedded ? (
             <>
-              {embedded.prefix.trim() && <p class="lv-msg-text">{embedded.prefix.trim()}</p>}
+              {embedded.prefix.trim() && <p class="lv-msg-text">{visibleControls(embedded.prefix.trim())}</p>}
               <div class="lv-json-card">
                 <div class="lv-json-card-head">
                   <span>JSON</span>
-                  <IconButton label="Copy JSON payload" icon="⧉" onClick={() => props.onCopyText(JSON.stringify(embedded.value, null, 2), 'JSON payload')} />
+                  <IconButton label="Copy JSON payload" icon="⧉" onClick={() => props.onCopyText(safeStringify(embedded.value, 2), 'JSON payload')} />
                 </div>
                 <JsonView value={embedded.value} />
               </div>
-              {embedded.suffix.trim() && <p class="lv-msg-text">{embedded.suffix.trim()}</p>}
+              {embedded.suffix.trim() && <p class="lv-msg-text">{visibleControls(embedded.suffix.trim())}</p>}
             </>
           ) : (
             <pre class="lv-pre lv-wrap lv-msg">{message ? <Dotted text={message} /> : <span class="lv-dim">(empty)</span>}</pre>
@@ -272,9 +313,9 @@ export function DetailsPanel(props: {
                   <li class={i === 0 ? 'lv-chain-root' : ''}>
                     {i > 0 && <span class="lv-chain-by">caused by</span>}
                     <span class="lv-chain-type" title={c.type}>
-                      {c.type.slice(c.type.lastIndexOf('.') + 1) || 'Exception'}
+                      {visibleControls(c.type.slice(c.type.lastIndexOf('.') + 1)) || 'Exception'}
                     </span>
-                    {c.message && <span class="lv-chain-msg">{c.message}</span>}
+                    {c.message && <span class="lv-chain-msg">{visibleControls(c.message)}</span>}
                   </li>
                 ))}
               </ol>
@@ -324,7 +365,7 @@ export function DetailsPanel(props: {
             {e.thread && (
               <div class="lv-frow">
                 <span class="lv-fkey">Thread</span>
-                <span class="lv-fval">{e.thread}</span>
+                <span class="lv-fval">{visibleControls(e.thread)}</span>
                 <span class="lv-factions">
                   <IconButton label="Search for this thread" icon="⌕" onClick={() => props.onSearch(e.thread)} />
                 </span>
@@ -370,10 +411,9 @@ export function DetailsPanel(props: {
         )}
 
         <section class="lv-dsec">
-          <details>
-            <summary>{e.json ? 'Raw JSON' : 'Raw line'}</summary>
-            {e.json ? <JsonView value={e.json} /> : <pre class="lv-pre lv-wrap">{e.raw}</pre>}
-          </details>
+          <LazyDetails summary={e.json ? 'Raw JSON' : 'Raw line'}>
+            {() => (e.json ? <JsonView value={e.json} fallback={e.raw} /> : <pre class="lv-pre lv-wrap">{visibleControls(e.raw)}</pre>)}
+          </LazyDetails>
         </section>
       </div>
     </aside>

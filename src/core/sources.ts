@@ -79,17 +79,31 @@ export function supportsSinceTime(url: string): boolean {
   return parsePodLogUrl(url) !== null;
 }
 
+/** Timestamps written by the app can't be trusted to be sane: Tail never asks for lines later than this ahead of now. */
+export const SINCE_TIME_MAX_AHEAD_MS = 5 * 60_000;
+
 /**
  * Adds `sinceTime` one second before the last known entry. Kubernetes filters by the kubelet's
  * write time (second precision), which is never earlier than the app's own timestamp, so nothing is missed;
- * the overlap is removed by `newLines()`.
+ * the overlap is removed by `newLines()`. A line dated in the future (by mistake or on purpose) would
+ * otherwise make every later request come back empty, so the time is capped at now + a few minutes.
  */
-export function withSinceTime(url: string, lastMs: number): string {
+export function withSinceTime(url: string, lastMs: number, now = Date.now()): string {
   const u = new URL(url);
-  const sec = Math.floor(lastMs / 1000) * 1000 - 1000;
+  const sec = Math.floor(Math.min(lastMs, now + SINCE_TIME_MAX_AHEAD_MS) / 1000) * 1000 - 1000;
   u.searchParams.set('sinceTime', new Date(sec).toISOString().replace(/\.\d{3}Z$/, 'Z'));
   // Kubernetes rejects sinceSeconds together with sinceTime, and applies tailLines first (it would drop lines).
   u.searchParams.delete('sinceSeconds');
   u.searchParams.delete('tailLines');
+  u.searchParams.delete('follow');
+  return u.href;
+}
+
+/** `follow=true` makes Kubernetes stream the log forever; the viewer needs a response that ends. */
+export function withoutFollow(url: string): string {
+  if (!supportsSinceTime(url)) return url;
+  const u = new URL(url);
+  if (!u.searchParams.has('follow')) return url;
+  u.searchParams.delete('follow');
   return u.href;
 }

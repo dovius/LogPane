@@ -1263,6 +1263,15 @@ mark.lv-hit {
   color: var(--lv-dim);
 }
 
+.lv-show-all {
+  display: flex;
+  margin-top: 8px;
+}
+.lv-frows > .lv-show-all {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
 .lv-j-key { color: var(--lv-j-key); }
 .lv-j-string { color: var(--lv-j-string); }
 .lv-j-number { color: var(--lv-j-number); }

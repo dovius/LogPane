@@ -1,3 +1,4 @@
+import { safeString, safeStringify } from './safeText';
 import type { JsonObject } from './types';
 
 /*
@@ -31,7 +32,7 @@ function typeOf(e: JsonObject): string {
 
 function header(e: JsonObject): string {
   const type = typeOf(e) || 'Exception';
-  const msg = typeof e.message === 'string' ? e.message : e.message == null ? '' : JSON.stringify(e.message);
+  const msg = typeof e.message === 'string' ? e.message : e.message == null ? '' : safeStringify(e.message);
   return msg ? `${type}: ${msg}` : type;
 }
 
@@ -43,7 +44,7 @@ export function fileNameForClass(cls: string): string {
 
 export function formatFrame(frame: unknown): string {
   const f = asObject(frame);
-  if (!f) return `at ${String(frame)}`;
+  if (!f) return `at ${safeString(frame)}`;
   const cls = typeof f.class === 'string' ? f.class : typeof f.className === 'string' ? f.className : '?';
   const method = typeof f.method === 'string' ? f.method : '?';
   const line = typeof f.line === 'number' ? f.line : Number.NaN;
@@ -64,7 +65,7 @@ function appendException(out: string[], e: JsonObject, prefix: string, indent: s
     return;
   }
   if (isBackReference(e)) {
-    out.push(`${indent}${prefix}[CIRCULAR REFERENCE: refId=${String(e.refId)}]`);
+    out.push(`${indent}${prefix}[CIRCULAR REFERENCE: refId=${safeString(e.refId)}]`);
     return;
   }
   out.push(`${indent}${prefix}${header(e)}`);

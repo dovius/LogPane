@@ -1,3 +1,4 @@
+import { safeStringify } from './safeText';
 import type { JsonObject, Level } from './types';
 
 /**
@@ -54,21 +55,18 @@ export function pickString(obj: JsonObject, aliases: readonly string[]): string 
   if (v === undefined) return '';
   if (typeof v === 'string') return v;
   if (typeof v !== 'object') return String(v);
-  try {
-    return JSON.stringify(v);
-  } catch {
-    return '[value too deeply nested to show]'; // JSON.parse copes with depths JSON.stringify overflows on
-  }
+  return safeStringify(v);
 }
 
-const LEVEL_NAMES: Record<string, Level> = {
+// A Map, not an object: level names come from the log and must never reach Object.prototype.
+const LEVEL_NAMES = new Map<string, Level>(Object.entries({
   FATAL: 'FATAL', CRITICAL: 'FATAL', CRIT: 'FATAL', EMERG: 'FATAL', EMERGENCY: 'FATAL', ALERT: 'FATAL', PANIC: 'FATAL',
   ERROR: 'ERROR', ERR: 'ERROR', SEVERE: 'ERROR',
   WARN: 'WARN', WARNING: 'WARN',
   INFO: 'INFO', INFORMATION: 'INFO', NOTICE: 'INFO', CONFIG: 'INFO',
   DEBUG: 'DEBUG', DBG: 'DEBUG', FINE: 'DEBUG',
   TRACE: 'TRACE', FINER: 'TRACE', FINEST: 'TRACE', ALL: 'TRACE', VERBOSE: 'TRACE',
-};
+} satisfies Record<string, Level>));
 
 export function normalizeLevel(value: unknown): Level {
   if (typeof value === 'number') {
@@ -83,7 +81,7 @@ export function normalizeLevel(value: unknown): Level {
   if (typeof value !== 'string') return 'OTHER';
   const text = value.trim();
   if (/^\d+$/.test(text)) return normalizeLevel(Number(text)); // "30" from loggers that stringify levels
-  return LEVEL_NAMES[text.toUpperCase()] ?? 'OTHER';
+  return LEVEL_NAMES.get(text.toUpperCase()) ?? 'OTHER';
 }
 
 /** GELF (and syslog) severities: 0 emergency … 7 debug. */
