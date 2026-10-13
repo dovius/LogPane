@@ -55,6 +55,8 @@ export interface LaunchOptions {
    */
   hostPermissions?: string[];
   headless?: boolean;
+  /** Pixel ratio of every page (store screenshots are taken at 1.25). */
+  deviceScaleFactor?: number;
 }
 
 /** Keyboard shortcut of the toolbar button in the test copy (grants activeTab like a click). */
@@ -73,6 +75,7 @@ export async function launch(options: LaunchOptions = {}): Promise<Harness> {
     executablePath: findChrome(),
     headless: options.headless ?? true,
     viewport: { width: 1400, height: 900 },
+    deviceScaleFactor: options.deviceScaleFactor,
     locale: 'en-US',
     timezoneId: 'Europe/Vilnius',
     args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`],

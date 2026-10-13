@@ -409,29 +409,30 @@ export function FilterBar(props: {
         </button>
       )}
 
-      <span class="lv-grow" />
-
-      <div class="lv-seg" role="group" aria-label="Jump">
-        <button type="button" title="Previous error (N)" aria-label="Previous error" onClick={() => props.onJump('error', -1)}>
-          <Icon name="left" />
-        </button>
-        <span class="lv-seg-label lv-lvl-ERROR">ERROR</span>
-        <button type="button" title="Next error (n)" aria-label="Next error" onClick={() => props.onJump('error', 1)}>
-          <Icon name="right" />
-        </button>
+      {/* one group: in a narrow window it moves to the next line as a whole, still on the right */}
+      <div class="lv-filter-end">
+        <div class="lv-seg" role="group" aria-label="Jump">
+          <button type="button" title="Previous error (N)" aria-label="Previous error" onClick={() => props.onJump('error', -1)}>
+            <Icon name="left" />
+          </button>
+          <span class="lv-seg-label lv-lvl-ERROR">ERROR</span>
+          <button type="button" title="Next error (n)" aria-label="Next error" onClick={() => props.onJump('error', 1)}>
+            <Icon name="right" />
+          </button>
+        </div>
+        <span class="lv-count" title="Entries shown / total">
+          {props.shown.toLocaleString()} / {props.total.toLocaleString()}
+        </span>
+        <Popover label="Export ▾" align="right">
+          {(close) => (
+            <div class="lv-menu">
+              <button type="button" class="lv-btn" onClick={() => { props.onCopyFiltered('text'); close(); }}>Copy shown as text</button>
+              <button type="button" class="lv-btn" onClick={() => { props.onCopyFiltered('ndjson'); close(); }}>Copy shown as raw JSON lines</button>
+              <button type="button" class="lv-btn" onClick={() => { props.onDownload(); close(); }}>Download shown (.log)</button>
+            </div>
+          )}
+        </Popover>
       </div>
-      <span class="lv-count" title="Entries shown / total">
-        {props.shown.toLocaleString()} / {props.total.toLocaleString()}
-      </span>
-      <Popover label="Export ▾" align="right">
-        {(close) => (
-          <div class="lv-menu">
-            <button type="button" class="lv-btn" onClick={() => { props.onCopyFiltered('text'); close(); }}>Copy shown as text</button>
-            <button type="button" class="lv-btn" onClick={() => { props.onCopyFiltered('ndjson'); close(); }}>Copy shown as raw JSON lines</button>
-            <button type="button" class="lv-btn" onClick={() => { props.onDownload(); close(); }}>Download shown (.log)</button>
-          </div>
-        )}
-      </Popover>
     </div>
   );
 }

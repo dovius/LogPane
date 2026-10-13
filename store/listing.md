@@ -77,7 +77,11 @@ Supported formats, for reference:
 | `promo-small-440x280.png` | Small promo tile (required for good placement) | 440×280 |
 | `promo-marquee-1400x560.png` | Marquee promo tile (optional, needed for marquee features) | 1400×560 |
 
-Screenshots are rendered at 1.25× from a 1024×640 layout, so text stays readable when the store shows them at 640×400.
+Screenshots are rendered at 10/9 from a 1152×720 layout, so text stays readable when the store shows them at 640×400. To make them again after UI changes:
+
+```sh
+npm run build && LOGPANE_STORE_SHOTS=1 LOGPANE_SKIP_BUILD=1 npx vitest run --config vitest.e2e.config.ts test/e2e/store-shots.e2e.ts
+```
 
 ## Privacy practices tab
 
