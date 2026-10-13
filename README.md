@@ -11,7 +11,7 @@ OpenShift console's **Raw** pod log), drop in a downloaded `.log` file, or paste
 ## Privacy first
 
 - **100% local processing.** Logs are parsed in the browser tab and never sent anywhere. There is no backend.
-- **Minimal permissions.** LogPane uses `activeTab`: it only sees a page when you click its button. Access to a domain is requested only if you enable automatic opening there.
+- **Minimal permissions.** LogPane uses `activeTab`: it only sees a page when you click its button. Access to a domain is requested only if you enable automatic opening there (one `https://` domain at a time, or `localhost`).
 - **No persistent log storage.** Logs live in memory while the tab is open. Only UI settings are saved.
 - **No tracking.** No analytics, no telemetry SDKs, no accounts.
 - **Enforced by the browser, not just promised.** Extension pages run with `connect-src 'none'`, and the standalone file with `default-src 'none'`, so they cannot make network requests at all.
@@ -27,6 +27,7 @@ Details: [PRIVACY.md](PRIVACY.md).
 - **Details panel**: the message (JSON inside it pretty-printed), the stack trace, then the fields grouped into trace IDs, context (nested objects flattened) and host / process. Values can be copied or searched one by one; ↑ / ↓ move to the neighbouring entry. The raw JSON is one click away.
 - **Stack traces**: structured exceptions (Quarkus `frames` / `causedBy` / `suppressed`), `stack_trace` strings and plain-text Java traces are shown as normal Java stack traces you can paste into the IDE, with a summary of the cause chain. Framework frames are dimmed and long runs of them folded.
 - **Several logs at once**: add files or Raw URLs, merged by timestamp, so you can follow one trace across services.
+- **Safe with untrusted logs**: log text is never treated as markup, crafted lines can't freeze or break the viewer, and control characters are shown and escaped. See [SECURITY.md](SECURITY.md#how-logpane-protects-you).
 - **Reload and live tail** for Kubernetes / OpenShift pod logs (uses `sinceTime`, pauses in background tabs).
   Some consoles answer the viewer's own requests with 401 and accept only real page loads. There, Reload reloads the tab like F5, and Tail reloads it every ≥ 10 s (shown as **Tail ↻**). Search, filters, selection and scroll position are kept across reloads.
 - **Copy / export**: an entry, its JSON, its stack trace, ±N lines of context, or everything currently shown.

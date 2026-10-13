@@ -1,6 +1,6 @@
 # LogPane privacy policy
 
-_Last updated: 12 October 2026_
+_Last updated: 13 October 2026_
 
 LogPane is a log viewer that runs entirely in your browser. It has no backend, no accounts and no analytics.
 
@@ -24,7 +24,7 @@ The only network requests LogPane makes are ones you trigger yourself, to fetch 
 - **Tail**
 - **Add log** with a URL
 
-These requests go to that same server with your existing browser session, exactly as if you had reloaded the page.
+These requests go to that same server with your existing browser session, exactly as if you had reloaded the page. Cookies are sent only to that server, and a response that redirects to another site is refused.
 
 Network access is also blocked technically:
 
@@ -33,12 +33,15 @@ Network access is also blocked technically:
 
 ## What LogPane stores
 
-`chrome.storage.local` on your device keeps two things:
+`chrome.storage.local` on your device keeps three things:
 
 - **Display settings:** time zone (UTC or local), font size, visible columns, details panel width, and the number of context lines for copying.
 - **Auto-open domains:** the list of domains you enabled for automatic opening.
+- **Domains you answered "Not now"** to the automatic-opening suggestion, so it isn't shown there again.
 
-Log content, search terms, filters and log URLs are **never** stored.
+Log content is **never** stored, and neither are search terms, filters or log URLs, with one short-lived exception.
+
+When **Reload** or **Tail** has to reload the tab like F5 (on consoles that reject LogPane's own requests), the current view is handed over the reload: the page's URL, the search, the filters and the selected line. This view is kept in Chrome's in-memory session storage for that tab only. It is deleted as soon as the page has reopened, when the reload lands on a different page, after two minutes, or when the tab is closed. It is never written to disk.
 
 ## Chrome Web Store User Data Policy
 
@@ -61,8 +64,8 @@ LogPane's use of the data it handles complies with the [Chrome Web Store User Da
 | --- | --- |
 | `activeTab` | Lets LogPane read the current tab's log text when you click the toolbar button. It does not give access to any other tab or site. |
 | `scripting` | Shows the viewer inside that tab. |
-| `storage` | Saves the display settings and auto-open domains listed above. |
-| Optional host access | Requested only for the specific domains you add for automatic opening, one domain at a time. You can remove them in the options at any time. |
+| `storage` | Saves the display settings and domain lists described above, and briefly keeps the view across a reload (in memory). |
+| Optional host access | Requested only for the specific domains you add for automatic opening, one `https://` domain at a time (plain `http://` only for `localhost`). Wildcards are not accepted. You can remove them in the options at any time. |
 
 ## Contact
 

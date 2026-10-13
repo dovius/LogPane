@@ -5,6 +5,7 @@
 //   node build.mjs --watch   rebuild on change
 //   node build.mjs --zip     build and pack dist/ into logpane-extension.zip
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -60,13 +61,22 @@ function copyStatic() {
 
 /** viewer.html with CSS and JS inlined, for sharing or when extensions are blocked. */
 function writeStandalone() {
-  const css = readFileSync(join(dist, 'viewer.css'), 'utf8');
+  const css = readFileSync(join(dist, 'viewer.css'), 'utf8').replace(/<\/style/gi, '<\\/style');
   const js = readFileSync(join(dist, 'viewer.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
   const notices = `LogPane ${pkg.version}\n\n${readFileSync(join(root, 'LICENSE'), 'utf8').trim()}\n\n${thirdPartyNotices()}`.replace(/--/g, '- -');
-  const html = readFileSync(join(root, 'static/viewer.html'), 'utf8')
+  const style = `\n${css}\n`;
+  const script = `\n${js}\n`;
+  // Only exactly this script and style may run: no 'unsafe-inline', so injected markup could never execute.
+  const sha = (text) => `'sha256-${createHash('sha256').update(text, 'utf8').digest('base64')}'`;
+  const csp = `default-src 'none'; script-src ${sha(script)}; style-src ${sha(style)}; img-src 'self'; base-uri 'none'; form-action 'none'`;
+  const template = readFileSync(join(root, 'static/viewer.html'), 'utf8');
+  const metaCsp = /(<meta http-equiv="Content-Security-Policy" content=")[^"]*(")/;
+  if (!metaCsp.test(template)) throw new Error('static/viewer.html: Content-Security-Policy meta tag not found');
+  const html = template
     .replace('<!doctype html>', () => `<!doctype html>\n<!--\n${notices}-->`)
-    .replace('<link rel="stylesheet" href="viewer.css" />', () => `<style>\n${css}\n</style>`)
-    .replace('<script src="viewer.js"></script>', () => `<script>\n${js}\n</script>`);
+    .replace(metaCsp, (_, open, close) => `${open}${csp}${close}`)
+    .replace('<link rel="stylesheet" href="viewer.css" />', () => `<style>${style}</style>`)
+    .replace('<script src="viewer.js"></script>', () => `<script>${script}</script>`);
   mkdirSync(join(dist, 'standalone'), { recursive: true });
   writeFileSync(join(dist, 'standalone', 'logpane.html'), html);
 }

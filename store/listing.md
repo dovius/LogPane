@@ -89,8 +89,8 @@ Screenshots are rendered at 1.25× from a 1024×640 layout, so text stays readab
 
 - **activeTab:** When the user clicks the toolbar button, LogPane reads the log text of the current tab to display it in the viewer. No other tabs are accessed.
 - **scripting:** Injects the viewer into the current tab after the user clicks the toolbar button, or on domains the user explicitly enabled.
-- **storage:** Stores display settings (time zone, font size, columns) and the list of domains the user enabled for automatic opening. Log content is never stored.
-- **Host permissions (optional):** Requested at runtime only for the specific domains the user adds in the options page. On those domains, Kubernetes / OpenShift "Raw" pod log pages open in the viewer automatically. Nothing is requested at install time.
+- **storage:** Stores display settings (time zone, font size, columns), the domains the user enabled for automatic opening, and the domains where the user declined the suggestion. While a Reload reloads the tab, the current view (search, filters, selected line) is kept in in-memory session storage for that tab and deleted as soon as the page reopens. Log content is never stored.
+- **Host permissions (optional):** Requested at runtime only for the specific https domains the user adds in the options page (plain http only for localhost, no wildcards). On those domains, Kubernetes / OpenShift "Raw" pod log pages open in the viewer automatically. Nothing is requested at install time.
 
 **Remote code:** No, I am not using remote code. All JavaScript is bundled in the package.
 
@@ -130,7 +130,7 @@ Screenshots are rendered at 1.25× from a 1024×640 layout, so text stays readab
 - [ ] Optionally replace `LogPane contributors` in `LICENSE` with your name.
 
 **Review**
-- Expect a longer, in-depth review: `optional_host_permissions` covers all sites (`https://*/*`, `http://*/*`). They are only requested per domain at runtime; say so in the host permission justification.
+- Expect a longer, in-depth review: `optional_host_permissions` covers all https sites (`https://*/*`, plus `http://localhost/*` and `http://127.0.0.1/*`). They are only requested per domain at runtime; say so in the host permission justification.
 - Before uploading, test the zip in a clean Chrome profile: Load unpacked → Raw page → toolbar button → options → add a domain → auto-open.
 - Distribution: keep "Public" and all regions. Visibility can start as "Unlisted" for a soft launch.
 
