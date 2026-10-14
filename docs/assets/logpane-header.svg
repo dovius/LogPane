@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="168" viewBox="0 0 760 168" role="img" aria-labelledby="title desc">
+  <title id="title">LogPane — JSON &amp; NDJSON log viewer</title>
+  <desc id="desc">An off-white LogPane wordmark beside a red-topped log pane with three dark log lines. A subtle charcoal brick pattern recalls the original LogPane icon.</desc>
+  <defs>
+    <pattern id="wall" width="80" height="40" patternUnits="userSpaceOnUse">
+      <path d="M0 0H80M0 20H80M0 40H80M40 0V20M0 20V40M80 20V40" fill="none" stroke="#272727" stroke-width="1"/>
+    </pattern>
+    <pattern id="icon-wall" width="24" height="24" patternUnits="userSpaceOnUse">
+      <rect width="24" height="24" fill="#272727"/>
+      <path d="M0 0H24M0 12H24M0 24H24M12 0V12M0 12V24M24 12V24" fill="none" stroke="#161616" stroke-width="2"/>
+    </pattern>
+    <clipPath id="panel">
+      <rect x="1" y="1" width="758" height="166" rx="16"/>
+    </clipPath>
+    <clipPath id="icon">
+      <rect x="164" y="36" width="96" height="96" rx="20"/>
+    </clipPath>
+  </defs>
+  <rect x="1" y="1" width="758" height="166" rx="16" fill="#161616"/>
+  <g clip-path="url(#panel)">
+    <rect width="760" height="168" fill="url(#wall)" opacity="0.55"/>
+    <path d="M116 36V132M644 36V132" stroke="#333333" stroke-width="1"/>
+    <path d="M116 68V100" stroke="#d32f1e" stroke-width="2"/>
+  </g>
+  <rect x="1" y="1" width="758" height="166" rx="16" fill="none" stroke="#333333"/>
+  <g clip-path="url(#icon)">
+    <rect x="164" y="36" width="96" height="96" fill="url(#icon-wall)"/>
+    <rect x="178" y="68" width="56" height="50" rx="2" fill="#efeee9"/>
+    <path d="M178 80H234M178 92H234M178 104H234M190 68V80M214 68V80M202 80V92M226 80V92M190 92V104M214 92V104M202 104V118M226 104V118" fill="none" stroke="#c4c3bd" stroke-width="1" opacity="0.45"/>
+    <rect x="178" y="49" width="68" height="12" rx="2" fill="#d32f1e"/>
+    <g fill="#121212">
+      <rect x="186" y="77" width="38" height="6" rx="1.5"/>
+      <rect x="186" y="90" width="28" height="6" rx="1.5"/>
+      <rect x="186" y="103" width="34" height="6" rx="1.5"/>
+    </g>
+  </g>
+  <rect x="164" y="36" width="96" height="96" rx="20" fill="none" stroke="#efeee9" stroke-width="3"/>
+  <g font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+    <text x="290" y="99" fill="#efeee9" font-size="64" font-weight="700" letter-spacing="-2.5">LogPane</text>
+    <text x="294" y="125" fill="#b9b8b2" font-size="13" font-weight="500" letter-spacing="1.5">JSON &amp; NDJSON LOG VIEWER</text>
+  </g>
+</svg>
