@@ -2,7 +2,7 @@
   "name": "logpane",
   "version": "1.0.1",
   "private": true,
-  "description": "LogPane – a fast, private JSON and NDJSON log viewer (Chrome extension).",
+  "description": "LogPane – a fast, private JSON and NDJSON log viewer (Chrome extension and standalone HTML file).",
   "license": "MIT",
   "homepage": "https://github.com/dovius/LogPane",
   "repository": {

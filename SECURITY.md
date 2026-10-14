@@ -46,4 +46,6 @@ a request body, a user name), and the page LogPane runs in may have its own scri
   domain at a time (plain `http://` only for `localhost`); wildcards are refused. Stored settings and domain
   lists are checked again whenever they are read.
 - **Small supply chain.** One runtime dependency (Preact), exact versions with a committed lockfile, no remote
-  code, no minification of LogPane's own code, so the package can be reviewed as shipped.
+  code, no minification of LogPane's own code, so the package can be reviewed as shipped. Release files are
+  built from the tagged commit by GitHub Actions ([release.yml](.github/workflows/release.yml)) and published
+  with SHA-256 checksums.

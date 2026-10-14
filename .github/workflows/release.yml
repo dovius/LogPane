@@ -1,0 +1,71 @@
+# Every pushed version tag (vX.Y.Z, as created by `npm version`) becomes a GitHub release with:
+#   logpane.html           the standalone viewer, one self-contained file
+#   logpane-extension.zip  the Chrome / Edge extension, the same zip that goes to the Chrome Web Store
+#   SHA256SUMS.txt         checksums of both
+# The file names never change, so .../releases/latest/download/logpane.html always gets the newest one.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the previous tag, for the list of changes
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Check that the tag matches package.json
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match package.json version $version. Create tags with npm version."
+            exit 1
+          fi
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run zip
+
+      - name: Collect the release files
+        run: |
+          mkdir release
+          cp dist/standalone/logpane.html logpane-extension.zip release/
+          cd release && sha256sum logpane.html logpane-extension.zip > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=${TAG#v}
+          prev=$(git describe --tags --abbrev=0 "$TAG^" 2>/dev/null || true)
+          {
+            echo '## Download'
+            echo
+            echo '- **logpane.html**: the standalone viewer. One file, nothing to install: open it in your browser and drop a log on it. Works where extensions are blocked.'
+            echo '- **logpane-extension.zip**: the Chrome / Edge extension. Unzip it, then **Load unpacked** in `chrome://extensions` with Developer mode on.'
+            echo
+            echo '## Changes'
+            echo
+            # commit subjects since the previous tag, without the version bump itself
+            git log --no-merges --format='- %s' "${prev:+$prev..}$TAG" | grep -vxF -e "- LogPane $version" -e "- $version" -e "- v$version" || true
+          } > notes.md
+          flags=()
+          if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi # v1.2.0-beta.1 and the like
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" release/* --clobber # re-run: replace the files, keep the text
+          else
+            gh release create "$TAG" release/* --verify-tag --title "LogPane $version" --notes-file notes.md "${flags[@]}"
+          fi

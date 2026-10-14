@@ -2,11 +2,24 @@
 
 **Structured logs, without the noise.**
 
-LogPane is a Chrome / Edge extension that turns raw JSON and NDJSON logs into a clean, searchable,
-easy-to-read interface, directly in your browser. Open it on a log page (for example the Kubernetes /
-OpenShift console's **Raw** pod log), drop in a downloaded `.log` file, or paste log text.
+LogPane turns raw JSON and NDJSON logs into a clean, searchable, easy-to-read interface, directly in
+your browser. It comes in two forms: a **standalone HTML file** that needs no install, and a
+**Chrome / Edge extension** that also opens logs right on the page (for example the Kubernetes /
+OpenShift console's **Raw** pod log).
 
 ![LogPane showing an error with its stack trace](store/screenshot-1-stack-trace.png)
+
+## Download
+
+- **Standalone:** [`logpane.html`](https://github.com/dovius/LogPane/releases/latest/download/logpane.html).
+  Open it in your browser, then drop `.log` files on it or paste log text. It is one self-contained file
+  with nothing to install, so it works where extensions are blocked by policy and can be passed around.
+- **Extension:** [`logpane-extension.zip`](https://github.com/dovius/LogPane/releases/latest/download/logpane-extension.zip).
+  Unzip it, go to `chrome://extensions` (Edge: `edge://extensions`), enable **Developer mode**, click
+  **Load unpacked** and select the unzipped folder. Only the extension can open a log page in place,
+  open Raw logs automatically, and Reload / Tail them.
+
+Every version is on the [Releases](https://github.com/dovius/LogPane/releases) page, with SHA-256 checksums.
 
 ## Privacy first
 
@@ -65,7 +78,7 @@ their entry. Timestamps keep full nanosecond precision for ordering.
 - **On a log page**: click the LogPane toolbar button on any plain-text log page. Click again, or use **Raw**, to switch back to the original text.
 - **Open automatically**: the first time you open a Raw pod log with the toolbar button, LogPane offers to open that console's Raw logs automatically. Click **Enable…**, confirm in the small window, and allow access in Chrome's prompt. The setting is also under View ▾ and in the extension options. From then on, clicking **Raw** in the console opens the log straight in LogPane. The raw text never flashes: it stays hidden while it downloads, and pages that are not JSON logs are left alone.
 - **Local files**: click the toolbar button on any other page, then drop `.log` / `.json` / `.ndjson` files or paste text.
-- **Without installing anything**: `dist/standalone/logpane.html` is one self-contained HTML file. Open it from disk and drop a log on it. This works where extensions are blocked by policy.
+- **Without installing anything**: the standalone [`logpane.html`](#download) (or `dist/standalone/logpane.html` after a build) is the same file viewer as one self-contained HTML file. Open it from disk and drop a log on it. It has no network access at all, so URLs can't be added there.
 
 ## Install from source
 
@@ -81,14 +94,26 @@ Then go to `chrome://extensions` (Edge: `edge://extensions`), enable **Developer
 
 ## Releasing
 
-`package.json` holds the version; the build copies it into `manifest.json`.
+`package.json` holds the version; the build copies it into `manifest.json` and the standalone file.
 
-1. `npm version patch` (or `minor` / `major`). This bumps the version, commits, and creates the tag `vX.Y.Z`.
-2. `npm ci && npm test && npm run zip` produces `logpane-extension.zip`.
+1. `npm run test:all`. The release workflow runs only the typecheck and unit tests, not the end-to-end tests.
+2. `npm version patch` (or `minor` / `major`). This bumps the version, commits, and creates the tag `vX.Y.Z`.
 3. `git push --follow-tags`.
-4. Upload the zip in the Chrome Web Store dashboard. Optionally attach it to a GitHub release for that tag.
 
-The Chrome Web Store only looks at the manifest version, which must increase with every upload. The tags let anyone check which source a store version was built from.
+Pushing the tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml). It checks that the tag
+matches `package.json`, runs the typecheck and unit tests, builds, and publishes a GitHub release for the tag with:
+
+- `logpane.html`, the standalone viewer;
+- `logpane-extension.zip`, the extension;
+- `SHA256SUMS.txt`.
+
+The release notes list the commit subjects since the previous tag. A tag with a suffix such as `v1.2.0-beta.1`
+becomes a pre-release, which the `latest/download` links skip. If the workflow fails, fix the cause and re-run
+it from the Actions tab. A re-run replaces the files of a release that already exists.
+
+For the Chrome Web Store, upload `logpane-extension.zip` from the release in the developer dashboard. The store
+only looks at the manifest version, which must increase with every upload. The tags let anyone check which
+source a store version was built from.
 
 ## Development
 
@@ -141,6 +166,7 @@ src/entries/  content script, background service worker, options page, standalon
 static/       manifest, HTML pages, icons
 store/        Chrome Web Store texts and graphics
 scripts/      dev server, fixture / demo / icon generators
+.github/      release workflow (a GitHub release for every version tag)
 ```
 
 ## License
