@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { entryToText } from '../../src/core/exportText';
 import { LogParser, looksLikeJsonLog, parseLinesChunked, parseText, searchText, splitLines } from '../../src/core/parse';
+import { TOO_DEEP } from '../../src/core/safeText';
 import { LEVELS, type LogEntry } from '../../src/core/types';
 
 // ---------- deterministic randomness ----------
@@ -149,7 +150,9 @@ describe('parser robustness: never throws', () => {
     const [other, msg] = parseText([`{"level":"INFO","payload":${nested(5000)}}`, `{"level":"INFO","message":${nested(5000)}}`].join('\n'), 1);
     expect(other.json).toBeDefined();
     expect(other.level).toBe('INFO');
-    expect(msg.message.startsWith('{"a":{"a":')).toBe(true);
+    expect(msg.level).toBe('INFO');
+    // 5000 levels is about where JSON.stringify runs out of stack: it prints on arm64 but not on x64 (the CI runner)
+    expect(msg.message === TOO_DEEP || msg.message.startsWith('{"a":{"a":')).toBe(true);
   });
 
   it('handles 100 000-level nested JSON in a non-message field', () => {
