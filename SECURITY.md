@@ -36,7 +36,9 @@ a request body, a user name), and the page LogPane runs in may have its own scri
 - **No network beyond the log's own server.** Extension pages run with `connect-src 'none'`, the standalone
   file with `default-src 'none'` and hashes for its only script and style. Reload and Tail fetch only from the
   page's own origin, send cookies only there, refuse redirects to other sites, read at most 256 MB and give up
-  after 30 s without data.
+  after 30 s without data. That fetch code exists only in the viewer inside log pages: the file viewer and the
+  standalone file are built without it, and the build fails if `logpane.html` contains `fetch`, `XMLHttpRequest`,
+  `WebSocket`, `sendBeacon`, `window.open`, extension APIs or similar.
 - **The page can't drive LogPane.** Web pages can't message the extension (no `externally_connectable`, no
   web-accessible resources). Messages from LogPane's own content script are accepted only from a tab's top
   frame, and the tab, URL and origin are taken from the sender. Buttons that open windows, request

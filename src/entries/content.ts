@@ -3,7 +3,8 @@
 import { looksLikeJsonLog } from '../core/parse';
 import { labelForUrl } from '../core/sources';
 import { mountApp, type AutoPrompt } from '../ui/App';
-import { loadSettings } from '../ui/settings';
+import { fetchText } from '../ui/fetchText';
+import { chromeSettings } from '../ui/settings';
 import { LogStore, MAX_LOG_BYTES } from '../ui/store';
 import { sanitizeViewState, type ViewState } from '../ui/viewState';
 import { dismissOrigin, getAutoOrigins, getDismissedOrigins, isRawLogPath } from './autoOrigins';
@@ -64,12 +65,13 @@ async function mount(text: string, manual: boolean): Promise<void> {
   const web = location.protocol === 'https:' || location.protocol === 'http:';
   document.title = `${label} – LogPane`;
 
-  const store = new LogStore();
-  const [initialSettings, prompt, initialView] = await Promise.all([loadSettings(), manual && web ? autoPrompt() : undefined, takeViewState()]);
+  const store = new LogStore(fetchText);
+  const [initialSettings, prompt, initialView] = await Promise.all([chromeSettings.load(), manual && web ? autoPrompt() : undefined, takeViewState()]);
   mountApp(root, {
     store,
     mode: 'page',
     initialSettings,
+    saveSettings: chromeSettings.save,
     canFetchUrls: web,
     pageReloadOnly: !web,
     baseUrl: location.href,

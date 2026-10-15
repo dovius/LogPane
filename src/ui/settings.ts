@@ -45,25 +45,45 @@ export function sanitizeSettings(v: unknown): Settings {
   };
 }
 
-const hasChromeStorage = () => typeof chrome !== 'undefined' && Boolean(chrome.storage?.local);
+/** Where the settings are kept. Settings are a convenience: storage failures are ignored. */
+export interface SettingsStorage {
+  load(): Promise<Settings>;
+  save(s: Settings): void;
+}
 
-export async function loadSettings(): Promise<Settings> {
-  try {
-    if (hasChromeStorage()) {
+/** The extension's pages and the viewer inside log pages. */
+export const chromeSettings: SettingsStorage = {
+  async load() {
+    try {
       return sanitizeSettings((await chrome.storage.local.get(KEY))[KEY]);
+    } catch {
+      return { ...DEFAULT_SETTINGS };
     }
-    const raw = localStorage.getItem(KEY);
-    return sanitizeSettings(raw ? JSON.parse(raw) : undefined);
-  } catch {
-    return { ...DEFAULT_SETTINGS };
-  }
-}
+  },
+  save(s) {
+    try {
+      void chrome.storage.local.set({ [KEY]: s });
+    } catch {
+      // ignored, see SettingsStorage
+    }
+  },
+};
 
-export function saveSettings(s: Settings): void {
-  try {
-    if (hasChromeStorage()) void chrome.storage.local.set({ [KEY]: s });
-    else localStorage.setItem(KEY, JSON.stringify(s));
-  } catch {
-    // settings are a convenience; ignore storage failures
-  }
-}
+/** The standalone logpane.html, which has no extension APIs. */
+export const localSettings: SettingsStorage = {
+  async load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      return sanitizeSettings(raw ? JSON.parse(raw) : undefined);
+    } catch {
+      return { ...DEFAULT_SETTINGS };
+    }
+  },
+  save(s) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(s));
+    } catch {
+      // ignored, see SettingsStorage
+    }
+  },
+};

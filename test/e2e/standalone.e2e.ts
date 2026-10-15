@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Page } from 'playwright-core';
 import { ordersService, paymentsService } from '../support/mocklogs';
-import { DIST, counts, launch, levelChips, waitLoaded, type Harness } from './harness';
+import { DIST, clickRow, counts, launch, levelChips, waitLoaded, type Harness } from './harness';
 
 let h: Harness;
 const orders = ordersService(50);
@@ -106,6 +106,31 @@ describe.each([0, 1])('file viewer (%s)', (i) => {
     await page.click('button:text("Export ▾")');
     const [download] = await Promise.all([page.waitForEvent('download'), page.click('button:text("Download shown (.log)")')]);
     expect(download.suggestedFilename()).toBe('payments-all.log');
+    await page.close();
+  });
+
+  it('makes no request besides its own files, even for links and markup in the log', async () => {
+    const page = await h.newPage();
+    const requests: string[] = [];
+    page.on('request', (r) => requests.push(r.url()));
+    await page.goto(url());
+    const hostile = [
+      { level: 'ERROR', message: '<img src="https://example.com/x.png" onerror="fetch(\'https://example.com/s\')"><a href="https://example.com/a">a</a>' },
+      { level: 'WARN', message: 'docs at https://example.com/docs', url: 'https://example.com/track?id=1', 'trace.id': 'abc' },
+    ].map((o) => JSON.stringify(o));
+    await page.fill('.lv-empty textarea', hostile.join('\n'));
+    await page.click('button:text("Open pasted text")');
+    await waitLoaded(page, 2);
+    await clickRow(page, 'docs at');
+    await clickRow(page, 'img src');
+    expect(await page.$$('.lv-app img, .lv-app a[href^="http"]')).toHaveLength(0);
+    await page.click('button:text("+ Add log")');
+    await page.waitForSelector('.lv-modal');
+    expect(await page.$('.lv-modal [placeholder^="https://"]'), 'no URL field').toBeNull();
+    await page.keyboard.press('Escape');
+    expect(await page.$$('button:text-matches("^(Reload|Tail)")'), 'no Reload / Tail').toHaveLength(0);
+    const own = url().slice(0, url().lastIndexOf('/') + 1);
+    expect(requests.filter((u) => !u.startsWith(own) && !/^(blob|data):/.test(u)), name()).toEqual([]);
     await page.close();
   });
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Builds the extension into dist/ (load it with chrome://extensions → Load unpacked)
-// plus dist/standalone/logpane.html, a single file with everything inlined.
+// plus dist/standalone/logpane.html, a single file with everything inlined and no network code.
 //   node build.mjs           build once
 //   node build.mjs --watch   rebuild on change
 //   node build.mjs --zip     build and pack dist/ into logpane-extension.zip
@@ -43,10 +43,29 @@ const common = {
 
 const builds = [
   { entryPoints: [join(root, 'src/entries/content.ts')], outfile: join(dist, 'content.js'), format: 'iife' },
-  { entryPoints: [join(root, 'src/entries/standalone.ts')], outfile: join(dist, 'viewer.js'), format: 'iife' },
+  { entryPoints: [join(root, 'src/entries/viewer.ts')], outfile: join(dist, 'viewer.js'), format: 'iife' },
   { entryPoints: [join(root, 'src/entries/options.ts')], outfile: join(dist, 'options.js'), format: 'iife' },
   { entryPoints: [join(root, 'src/entries/background.ts')], outfile: join(dist, 'background.js'), format: 'esm' },
+  // kept in memory and inlined into standalone/logpane.html
+  { entryPoints: [join(root, 'src/entries/standalone.ts')], outfile: join(dist, 'standalone', 'logpane.js'), format: 'iife', write: false },
 ];
+
+/**
+ * The standalone file reads only files and pasted text. Its CSP already blocks every request; on top of that it
+ * must not even contain code that could send data out or use extension APIs. A tripwire for our own code, checked
+ * without comments, so a word in a comment can't trip it.
+ */
+const STANDALONE_FORBIDDEN = [
+  /\bfetch\(/, /\.fetch\b/, /\bXMLHttpRequest\b/, /\bWebSocket\b/, /\bEventSource\b/, /\bWebTransport\b/, /\bRTCPeerConnection\b/,
+  /\bsendBeacon\b/, /\bimportScripts\b/, /\bWorker\(/, /\bserviceWorker\b/, /\bwindow\.open\b/, /\blocation\.(href|assign|replace)\b/,
+  /\bchrome\./, /\bimport\(/, /\beval\(/, /\bFunction\(/,
+];
+
+function checkStandalone(js) {
+  const { code } = esbuild.transformSync(js, { minifyWhitespace: true, legalComments: 'none' });
+  const found = STANDALONE_FORBIDDEN.filter((re) => re.test(code));
+  if (found.length) throw new Error(`standalone logpane.html must not contain network or extension code, found ${found.join(', ')}`);
+}
 
 function copyStatic() {
   // skip OS clutter such as Finder's .DS_Store
@@ -59,10 +78,11 @@ function copyStatic() {
   writeFileSync(join(dist, 'THIRD_PARTY_LICENSES.txt'), thirdPartyNotices());
 }
 
-/** viewer.html with CSS and JS inlined, for sharing or when extensions are blocked. */
-function writeStandalone() {
+/** viewer.html with CSS and the standalone bundle inlined, for sharing or when extensions are blocked. */
+function writeStandalone(bundle) {
+  checkStandalone(bundle);
   const css = readFileSync(join(dist, 'viewer.css'), 'utf8').replace(/<\/style/gi, '<\\/style');
-  const js = readFileSync(join(dist, 'viewer.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
+  const js = bundle.replace(/<\/script/gi, '<\\/script');
   const notices = `LogPane ${pkg.version}\n\n${readFileSync(join(root, 'LICENSE'), 'utf8').trim()}\n\n${thirdPartyNotices()}`.replace(/--/g, '- -');
   const style = `\n${css}\n`;
   const script = `\n${js}\n`;
@@ -87,7 +107,7 @@ const afterBuild = {
     build.onEnd((result) => {
       if (result.errors.length) return;
       copyStatic();
-      if (build.initialOptions.outfile?.endsWith('viewer.js')) writeStandalone();
+      if (build.initialOptions.write === false) writeStandalone(result.outputFiles[0].text);
     });
   },
 };

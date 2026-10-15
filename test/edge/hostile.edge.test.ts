@@ -11,7 +11,8 @@ import { groupFields, splitPlainStack } from '../../src/ui/fieldGroups';
 import { jsonTokens, parseStackLine, stackParts } from '../../src/ui/format';
 import { getAutoOrigins, getDismissedOrigins, normalizeOrigin } from '../../src/entries/autoOrigins';
 import { DEFAULT_SETTINGS, sanitizeSettings } from '../../src/ui/settings';
-import { FETCH_IDLE_MS, LimitError, fetchText } from '../../src/ui/store';
+import { FETCH_IDLE_MS, fetchText } from '../../src/ui/fetchText';
+import { LimitError, LogStore } from '../../src/ui/store';
 import { sanitizeViewState } from '../../src/ui/viewState';
 
 const deep = (n: number): unknown => {
@@ -180,6 +181,19 @@ describe('Tail and fetching', () => {
     const check = expect(done).rejects.toThrow(/No data from the server/);
     await vi.advanceTimersByTimeAsync(FETCH_IDLE_MS + 10);
     await check;
+  });
+
+  it('a store without fetchLog (file viewer, logpane.html) never fetches', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const store = new LogStore();
+    await store.addText({ label: 'page', kind: 'page', url: 'https://console.example.com/log' }, '{"level":"INFO","message":"a"}');
+    await store.addUrl({ label: 'url', kind: 'url', url: 'https://console.example.com/other' });
+    expect(store.hasRefetchable).toBe(false);
+    await store.reload();
+    expect(await store.tail()).toBe(0);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(store.sources[1]).toMatchObject({ status: 'error', errorLimit: true });
   });
 });
 

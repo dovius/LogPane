@@ -11,7 +11,7 @@ import { copyText, downloadText } from './clipboard';
 import { DetailsPanel, type CopyWhat } from './DetailsPanel';
 import { pluralize } from './format';
 import { ColumnHeader, LogList, gridTemplate, type ListApi } from './LogList';
-import { saveSettings, type Settings } from './settings';
+import type { Settings } from './settings';
 import { isRejected, type LogStore } from './store';
 import { RELOAD_TAIL_MIN_SECONDS, type ViewState } from './viewState';
 import { FilterBar, Header, NoMatches } from './Toolbar';
@@ -29,6 +29,7 @@ export interface AppProps {
   store: LogStore;
   mode: 'page' | 'standalone';
   initialSettings: Settings;
+  saveSettings: (s: Settings) => void;
   /** Raw URLs can be fetched (same origin as the page). */
   canFetchUrls: boolean;
   /** Resolves pasted relative URLs; also the only origin URLs may come from. */
@@ -74,7 +75,7 @@ export function App(props: AppProps) {
   const updateSettings = (patch: Partial<Settings>) =>
     setSettings((s) => {
       const next = { ...s, ...patch };
-      saveSettings(next);
+      props.saveSettings(next);
       return next;
     });
   const [detailsWidth, setDetailsWidth] = useState(settings.detailsWidth);

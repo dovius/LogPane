@@ -29,7 +29,7 @@ These requests go to that same server with your existing browser session, exactl
 Network access is also blocked technically:
 
 - **Extension pages** (the file viewer and the options page) run under a Content Security Policy with `connect-src 'none'`. They cannot make network requests at all.
-- **The standalone `logpane.html` file** runs under `default-src 'none'`. It cannot make network requests either.
+- **The standalone `logpane.html` file** runs under `default-src 'none'`. It cannot make network requests either, and contains no code that makes them.
 
 ## What LogPane stores
 

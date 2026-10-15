@@ -27,7 +27,7 @@ Every version is on the [Releases](https://github.com/dovius/LogPane/releases) p
 - **Minimal permissions.** LogPane uses `activeTab`: it only sees a page when you click its button. Access to a domain is requested only if you enable automatic opening there (one `https://` domain at a time, or `localhost`).
 - **No persistent log storage.** Logs live in memory while the tab is open. Only UI settings are saved.
 - **No tracking.** No analytics, no telemetry SDKs, no accounts.
-- **Enforced by the browser, not just promised.** Extension pages run with `connect-src 'none'`, and the standalone file with `default-src 'none'`, so they cannot make network requests at all.
+- **Enforced by the browser, not just promised.** Extension pages run with `connect-src 'none'`, and the standalone file with `default-src 'none'`, so they cannot make network requests at all. The file viewer and the standalone file don't even contain the code that fetches logs, and the build fails if network or extension APIs ever show up in `logpane.html`.
 
 Details: [PRIVACY.md](PRIVACY.md).
 
@@ -78,7 +78,7 @@ their entry. Timestamps keep full nanosecond precision for ordering.
 - **On a log page**: click the LogPane toolbar button on any plain-text log page. Click again, or use **Raw**, to switch back to the original text.
 - **Open automatically**: the first time you open a Raw pod log with the toolbar button, LogPane offers to open that console's Raw logs automatically. Click **Enable…**, confirm in the small window, and allow access in Chrome's prompt. The setting is also under View ▾ and in the extension options. From then on, clicking **Raw** in the console opens the log straight in LogPane. The raw text never flashes: it stays hidden while it downloads, and pages that are not JSON logs are left alone.
 - **Local files**: click the toolbar button on any other page, then drop `.log` / `.json` / `.ndjson` files or paste text.
-- **Without installing anything**: the standalone [`logpane.html`](#download) (or `dist/standalone/logpane.html` after a build) is the same file viewer as one self-contained HTML file. Open it from disk and drop a log on it. It has no network access at all, so URLs can't be added there.
+- **Without installing anything**: the standalone [`logpane.html`](#download) (or `dist/standalone/logpane.html` after a build) is the same file viewer as one self-contained HTML file. Open it from disk and drop a log on it. It works only with what you give it, files and pasted text, so there are no URLs, Reload or Tail, and no network code at all.
 
 ## Install from source
 
@@ -162,7 +162,7 @@ The bundles are intentionally not minified, so they are easy to review.
 ```
 src/core/     parsing, field aliases, time, filters, merge, stack traces, tail (pure TS, unit-tested)
 src/ui/       Preact UI, store, CSS
-src/entries/  content script, background service worker, options page, standalone page
+src/entries/  content script, background service worker, options page, file viewer page, standalone file
 static/       manifest, HTML pages, icons
 store/        Chrome Web Store texts and graphics
 scripts/      dev server, fixture / demo / icon generators
